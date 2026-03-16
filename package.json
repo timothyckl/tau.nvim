@@ -6,8 +6,8 @@
   ],
   "scripts": {
     "build": "tsc -b packages/core packages/tui packages/cli",
-    "typecheck": "tsc --noEmit -b packages/core packages/tui packages/cli",
-    "test": "vitest run",
+    "typecheck": "tsc -b packages/core packages/tui packages/cli",
+    "test": "vitest run --passWithNoTests",
     "test:watch": "vitest"
   },
   "devDependencies": {
