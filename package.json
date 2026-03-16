@@ -6,7 +6,7 @@
   ],
   "scripts": {
     "build": "tsc -b packages/core packages/tui packages/cli",
-    "typecheck": "tsc --noEmit -b packages/core packages/tui packages/cli",
+    "typecheck": "tsc -b packages/core packages/tui packages/cli",
     "test": "vitest run",
     "test:watch": "vitest"
   },
