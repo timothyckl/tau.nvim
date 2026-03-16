@@ -48,5 +48,18 @@ export interface MessageQueue {
  * creates a new empty message queue.
  */
 export function createQueue(): MessageQueue {
-  throw new Error("not implemented")
+  // two separate arrays keep drain operations O(n) without cross-contamination
+  const steering: QueuedMessage[] = []
+  const followup: QueuedMessage[] = []
+
+  return {
+    enqueue(message) {
+      if (message.kind === "steering") steering.push(message)
+      else followup.push(message)
+    },
+    drainSteering() { return steering.splice(0) },
+    drainFollowup() { return followup.splice(0) },
+    hasPending()    { return steering.length > 0 || followup.length > 0 },
+    clear()         { steering.splice(0); followup.splice(0) },
+  }
 }

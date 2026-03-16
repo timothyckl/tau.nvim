@@ -7,4 +7,5 @@ build/
 .DS_Store
 *.tsbuildinfo
 CLAUDE.md
+.claude/
 files/
