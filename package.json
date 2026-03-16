@@ -1,0 +1,17 @@
+{
+  "name": "tau",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "tsc -b packages/core packages/tui packages/cli",
+    "typecheck": "tsc --noEmit -b packages/core packages/tui packages/cli",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "vitest": "^3.0.0"
+  }
+}
