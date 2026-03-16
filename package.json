@@ -7,7 +7,7 @@
   "scripts": {
     "build": "tsc -b packages/core packages/tui packages/cli",
     "typecheck": "tsc -b packages/core packages/tui packages/cli",
-    "test": "vitest run",
+    "test": "vitest run --passWithNoTests",
     "test:watch": "vitest"
   },
   "devDependencies": {
