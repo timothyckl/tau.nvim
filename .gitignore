@@ -1,0 +1,5 @@
+cli/tau
+cli/.*.bun-build
+cli/node_modules/
+.DS_Store
+*.log
