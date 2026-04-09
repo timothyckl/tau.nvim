@@ -1,8 +1,6 @@
 # tau.nvim
 
-AI-powered inline code editing for Neovim. Select code, describe what you want, and the selection is replaced in-place by an LLM.
-
-Works with any OpenAI-compatible API — LM Studio, Ollama, OpenAI, and others.
+The simplest way to do inline code edits with an LLM in Neovim.
 
 ## Requirements
 
