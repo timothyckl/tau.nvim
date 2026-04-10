@@ -24,7 +24,7 @@ Using [lazy.nvim](https://github.com/folke/lazy.nvim):
     })
   end,
   keys = {
-    { "<leader>t", ":Tau ", mode = "v", desc = "Tau: LLM edit selection" },
+    { "<leader>t", ":Tau<CR>", mode = "v", desc = "Tau: LLM edit selection" },
   },
 }
 ```
