@@ -7,14 +7,20 @@ local M = {}
 --- @type table
 local config = {}
 
---- @type { handle: vim.SystemObj, bufnr: integer, cancelled: boolean } | nil
+local SIGTERM = 15
+
+--- @type { handle: vim.SystemObj|nil, bufnr: integer, cancelled: boolean, prev_esc: table } | nil
 local _job = nil
 
---- Tear down all in-flight state: stop UI, remove <Esc> mapping, unlock buffer.
+--- Tear down all in-flight state: stop UI, restore <Esc> mapping, unlock buffer.
 --- @param bufnr integer
 local function _cleanup(bufnr)
+  if not _job then return end
   ui.stop()
   pcall(vim.keymap.del, "n", "<Esc>", { buffer = bufnr })
+  if _job.prev_esc and _job.prev_esc.lhs ~= "" then
+    vim.fn.mapset("n", false, _job.prev_esc)
+  end
   vim.bo[bufnr].modifiable = true
   _job = nil
 end
@@ -130,6 +136,12 @@ function M._execute(bufnr, start_line, end_line, instruction)
 
   local accumulated = ""
 
+  -- Pre-assign _job so callbacks always see a non-nil sentinel even if the
+  -- process exits before vim.system returns on this tick. handle is filled in
+  -- below after runner.run() returns.
+  local prev_esc = vim.fn.maparg("<Esc>", "n", false, true)
+  _job = { handle = nil, bufnr = bufnr, cancelled = false, prev_esc = prev_esc }
+
   local handle = runner.run({
     config = config,
     instruction = instruction,
@@ -145,8 +157,11 @@ function M._execute(bufnr, start_line, end_line, instruction)
 
     on_done = function()
       if not _job then return end
-      local b = bufnr
-      _cleanup(b)
+      if _job.cancelled then
+        _cleanup(bufnr)
+        return
+      end
+      _cleanup(bufnr)
 
       local ok, err = pcall(function()
         -- Strip markdown code fences the model may wrap output in
@@ -156,7 +171,7 @@ function M._execute(bufnr, start_line, end_line, instruction)
 
         local new_lines = vim.split(text, "\n", { plain = true })
         new_lines = reindent(new_lines, indent)
-        vim.api.nvim_buf_set_lines(b, start_line - 1, end_line, false, new_lines)
+        vim.api.nvim_buf_set_lines(bufnr, start_line - 1, end_line, false, new_lines)
       end)
       if not ok then
         vim.api.nvim_echo({ { "tau: " .. tostring(err), "ErrorMsg" } }, false, {})
@@ -166,22 +181,21 @@ function M._execute(bufnr, start_line, end_line, instruction)
     on_error = function(msg)
       if not _job then return end
       local was_cancelled = _job.cancelled
-      local b = bufnr
-      _cleanup(b)
+      _cleanup(bufnr)
 
       if was_cancelled then return end
 
       local ok, err = pcall(function()
-        ui.error(b, start_line, msg)
+        ui.error(bufnr, start_line, msg)
       end)
       if not ok then
-        pcall(function() vim.bo[b].modifiable = true end)
+        pcall(function() vim.bo[bufnr].modifiable = true end)
         vim.api.nvim_echo({ { "tau: " .. tostring(err), "ErrorMsg" } }, false, {})
       end
     end,
   })
 
-  _job = { handle = handle, bufnr = bufnr, cancelled = false }
+  _job.handle = handle
 
   vim.keymap.set("n", "<Esc>", function()
     require("tau").cancel()
@@ -196,9 +210,11 @@ function M.cancel()
   end
 
   local j = _job
-  j.cancelled = true    -- set before kill so the exit callback sees it
-  j.handle:kill(15)     -- SIGTERM
-  _cleanup(j.bufnr)     -- immediate UI teardown; don't wait for the callback
+  j.cancelled = true          -- set before kill so the exit callback sees it
+  if j.handle then
+    j.handle:kill(SIGTERM)    -- process may exit 0 or non-zero; cancelled flag handles both
+  end
+  _cleanup(j.bufnr)           -- immediate UI teardown; don't wait for the callback
 
   vim.api.nvim_echo({ { "tau: cancelled", "Comment" } }, false, {})
 end
