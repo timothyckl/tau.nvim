@@ -41,7 +41,7 @@ function M.run(opts)
     vim.list_extend(cmd, { "--filetype", opts.filetype })
   end
 
-  vim.system(cmd, {
+  local handle = vim.system(cmd, {
     env = env,
     stdin = opts.selection_text,
     stdout = function(_, chunk)
@@ -59,6 +59,7 @@ function M.run(opts)
       end
     end)
   end)
+  return handle
 end
 
 return M

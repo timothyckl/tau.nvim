@@ -7,6 +7,18 @@ local M = {}
 --- @type table
 local config = {}
 
+--- @type { handle: vim.SystemObj, bufnr: integer, cancelled: boolean } | nil
+local _job = nil
+
+--- Tear down all in-flight state: stop UI, remove <Esc> mapping, unlock buffer.
+--- @param bufnr integer
+local function _cleanup(bufnr)
+  ui.stop()
+  pcall(vim.keymap.del, "n", "<Esc>", { buffer = bufnr })
+  vim.bo[bufnr].modifiable = true
+  _job = nil
+end
+
 --- Configure the plugin. Must be called before using :Tau.
 --- @param opts table { api_url: string, api_key: string, model?: string, debug?: boolean, timeout_ms?: number }
 function M.setup(opts)
@@ -102,6 +114,11 @@ local function reindent(lines, target)
 end
 
 function M._execute(bufnr, start_line, end_line, instruction)
+  if _job then
+    vim.api.nvim_echo({ { "tau: request already in flight", "WarningMsg" } }, false, {})
+    return
+  end
+
   local ctx = context.get(bufnr, start_line, end_line)
   local indent = base_indent(ctx.selection.lines)
 
@@ -113,7 +130,7 @@ function M._execute(bufnr, start_line, end_line, instruction)
 
   local accumulated = ""
 
-  runner.run({
+  local handle = runner.run({
     config = config,
     instruction = instruction,
     selection_text = ctx.selection.text,
@@ -127,8 +144,9 @@ function M._execute(bufnr, start_line, end_line, instruction)
     end,
 
     on_done = function()
-      ui.stop()
-      vim.bo[bufnr].modifiable = true
+      if not _job then return end
+      local b = bufnr
+      _cleanup(b)
 
       local ok, err = pcall(function()
         -- Strip markdown code fences the model may wrap output in
@@ -138,7 +156,7 @@ function M._execute(bufnr, start_line, end_line, instruction)
 
         local new_lines = vim.split(text, "\n", { plain = true })
         new_lines = reindent(new_lines, indent)
-        vim.api.nvim_buf_set_lines(bufnr, start_line - 1, end_line, false, new_lines)
+        vim.api.nvim_buf_set_lines(b, start_line - 1, end_line, false, new_lines)
       end)
       if not ok then
         vim.api.nvim_echo({ { "tau: " .. tostring(err), "ErrorMsg" } }, false, {})
@@ -146,17 +164,43 @@ function M._execute(bufnr, start_line, end_line, instruction)
     end,
 
     on_error = function(msg)
+      if not _job then return end
+      local was_cancelled = _job.cancelled
+      local b = bufnr
+      _cleanup(b)
+
+      if was_cancelled then return end
+
       local ok, err = pcall(function()
-        ui.stop()
-        vim.bo[bufnr].modifiable = true
-        ui.error(bufnr, start_line, msg)
+        ui.error(b, start_line, msg)
       end)
       if not ok then
-        pcall(function() vim.bo[bufnr].modifiable = true end)
+        pcall(function() vim.bo[b].modifiable = true end)
         vim.api.nvim_echo({ { "tau: " .. tostring(err), "ErrorMsg" } }, false, {})
       end
     end,
   })
+
+  _job = { handle = handle, bufnr = bufnr, cancelled = false }
+
+  vim.keymap.set("n", "<Esc>", function()
+    require("tau").cancel()
+  end, { buffer = bufnr, noremap = true, silent = true, desc = "tau: cancel request" })
+end
+
+--- Cancel the in-flight request, if any.
+function M.cancel()
+  if not _job then
+    vim.api.nvim_echo({ { "tau: no request in flight", "Comment" } }, false, {})
+    return
+  end
+
+  local j = _job
+  j.cancelled = true    -- set before kill so the exit callback sees it
+  j.handle:kill(15)     -- SIGTERM
+  _cleanup(j.bufnr)     -- immediate UI teardown; don't wait for the callback
+
+  vim.api.nvim_echo({ { "tau: cancelled", "Comment" } }, false, {})
 end
 
 return M
