@@ -18,7 +18,7 @@ local function _cleanup(bufnr)
   if not _job then return end
   ui.stop()
   pcall(vim.keymap.del, "n", "<Esc>", { buffer = bufnr })
-  if _job.prev_esc and _job.prev_esc.lhs ~= "" then
+  if _job.prev_esc and _job.prev_esc.lhs and _job.prev_esc.lhs ~= "" then
     vim.fn.mapset("n", false, _job.prev_esc)
   end
   vim.bo[bufnr].modifiable = true
