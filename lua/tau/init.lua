@@ -12,17 +12,54 @@ local SIGTERM = 15
 --- @type { handle: vim.SystemObj|nil, bufnr: integer, cancelled: boolean, prev_esc: table } | nil
 local _job = nil
 
+--- @type { bufnr: integer, start_line: integer, end_line: integer, new_lines: string[] } | nil
+local _pending = nil
+
+--- Clear preview UI unconditionally — safe to call even if _job is nil.
+local function _clear_pending()
+  if not _pending then return end
+  ui.clear_preview(_pending.bufnr)
+  pcall(vim.keymap.del, "n", "<CR>", { buffer = _pending.bufnr })
+  _pending = nil
+end
+
 --- Tear down all in-flight state: stop UI, restore <Esc> mapping, unlock buffer.
 --- @param bufnr integer
 local function _cleanup(bufnr)
+  -- Clear preview before the _job guard so ghost extmarks are never left behind
+  -- if _job has already been set to nil (e.g. double-accept or cancel race).
+  _clear_pending()
   if not _job then return end
   ui.stop()
   pcall(vim.keymap.del, "n", "<Esc>", { buffer = bufnr })
   if _job.prev_esc and _job.prev_esc.lhs and _job.prev_esc.lhs ~= "" then
-    vim.fn.mapset("n", false, _job.prev_esc)
+    if vim.api.nvim_buf_is_valid(bufnr) then
+      -- prev_esc is captured before any <Esc> mapping is installed in _execute.
+      -- Do not move that capture below any vim.keymap.set call or this restore breaks.
+      vim.fn.mapset("n", false, _job.prev_esc)
+    end
   end
   vim.bo[bufnr].modifiable = true
   _job = nil
+end
+
+local function _accept()
+  if not _pending then return end
+  local p = _pending
+  _cleanup(p.bufnr)
+  if not vim.api.nvim_buf_is_valid(p.bufnr) then
+    vim.api.nvim_echo({ { "tau: buffer was closed, replacement lost", "ErrorMsg" } }, false, {})
+    return
+  end
+  local ok, err = pcall(vim.api.nvim_buf_set_lines, p.bufnr, p.start_line - 1, p.end_line, false, p.new_lines)
+  if not ok then
+    vim.api.nvim_echo({ { "tau: failed to apply replacement: " .. tostring(err), "ErrorMsg" } }, false, {})
+  end
+end
+
+local function _reject()
+  if not _pending then return end
+  _cleanup(_pending.bufnr)
 end
 
 --- Configure the plugin. Must be called before using :Tau.
@@ -161,7 +198,9 @@ function M._execute(bufnr, start_line, end_line, instruction)
         _cleanup(bufnr)
         return
       end
-      _cleanup(bufnr)
+
+      -- Stop spinner; defer full cleanup until accept/reject
+      ui.stop()
 
       local ok, err = pcall(function()
         -- Strip markdown code fences the model may wrap output in
@@ -169,11 +208,19 @@ function M._execute(bufnr, start_line, end_line, instruction)
         -- Remove only trailing whitespace, preserve leading indentation
         text = text:gsub("%s+$", "")
 
-        local new_lines = vim.split(text, "\n", { plain = true })
-        new_lines = reindent(new_lines, indent)
-        vim.api.nvim_buf_set_lines(bufnr, start_line - 1, end_line, false, new_lines)
+        local new_lines = reindent(vim.split(text, "\n", { plain = true }), indent)
+
+        _pending = { bufnr = bufnr, start_line = start_line, end_line = end_line, new_lines = new_lines }
+        ui.show_preview(bufnr, start_line, end_line, new_lines, instruction)
+
+        -- <Esc> now rejects instead of cancels; <CR> accepts
+        vim.keymap.set("n", "<Esc>", _reject,
+          { buffer = bufnr, noremap = true, silent = true, desc = "tau: reject replacement" })
+        vim.keymap.set("n", "<CR>", _accept,
+          { buffer = bufnr, noremap = true, silent = true, desc = "tau: accept replacement" })
       end)
       if not ok then
+        _cleanup(bufnr)
         vim.api.nvim_echo({ { "tau: " .. tostring(err), "ErrorMsg" } }, false, {})
       end
     end,

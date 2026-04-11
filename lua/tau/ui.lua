@@ -1,7 +1,9 @@
 local M = {}
 
-local NS = vim.api.nvim_create_namespace("tau")
+local NS         = vim.api.nvim_create_namespace("tau")
+local NS_PREVIEW = vim.api.nvim_create_namespace("tau_preview")
 local SPINNER_FRAMES = { "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏" }
+
 
 local _timer = nil
 local _bufnr = nil
@@ -54,6 +56,68 @@ function M.stop()
     vim.api.nvim_buf_clear_namespace(_bufnr, NS, 0, -1)
   end
   _bufnr = nil
+end
+
+--- Show inline diff: a virtual block above the selection (header + prompt + new lines + separator),
+--- with the original buffer lines highlighted as deleted beneath it.
+--- @param bufnr integer
+--- @param start_line integer 1-indexed
+--- @param end_line integer 1-indexed
+--- @param new_lines string[]
+--- @param instruction string
+function M.show_preview(bufnr, start_line, end_line, new_lines, instruction)
+  -- Per-line extmarks for original (deleted) lines
+  for i = start_line - 1, end_line - 1 do
+    vim.api.nvim_buf_set_extmark(bufnr, NS_PREVIEW, i, 0, {
+      line_hl_group = "DiffDelete",
+      virt_text     = { { "-", "DiffDelete" } },
+      virt_text_pos = "inline",
+    })
+  end
+
+  -- Compute width dynamically: "──<title>──" needs #title + 4;
+  -- each content line needs #("+line"). Uses byte length (correct for ASCII).
+  local title = " tau: " .. instruction .. " "
+  local w = #title + 4
+  for _, line in ipairs(new_lines) do
+    w = math.max(w, #line + 1)  -- "+line"
+  end
+
+  local sep_top = "──" .. title .. string.rep("─", w - #title - 4) .. "──"
+  local sep_mid = string.rep("─", w)
+
+  local virt = { { { sep_top, "Comment" } } }
+
+  for _, line in ipairs(new_lines) do
+    table.insert(virt, { { "+", "DiffAdd" }, { line ~= "" and line or " ", "DiffAdd" } })
+  end
+
+  table.insert(virt, { { sep_mid, "Comment" } })
+
+  -- Virtual block (header + proposed lines + separator) above the selection
+  vim.api.nvim_buf_set_extmark(bufnr, NS_PREVIEW, start_line - 1, 0, {
+    virt_lines       = virt,
+    virt_lines_above = true,
+  })
+
+  -- Accept/reject hint as a virtual line below the selection
+  vim.api.nvim_buf_set_extmark(bufnr, NS_PREVIEW, end_line - 1, 0, {
+    virt_lines = {
+      {
+        { " ",          "Comment" },
+        { "<CR>",       "Special" },
+        { " accept · ", "Comment" },
+        { "<Esc>",      "Special" },
+        { " reject",    "Comment" },
+      },
+    },
+  })
+end
+
+--- Clear all preview highlights and virtual lines.
+--- @param bufnr integer
+function M.clear_preview(bufnr)
+  vim.api.nvim_buf_clear_namespace(bufnr, NS_PREVIEW, 0, -1)
 end
 
 --- Show an error as virtual text above the selection and on the cmdline.
