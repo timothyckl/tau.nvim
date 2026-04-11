@@ -97,6 +97,13 @@ function M.show_preview(bufnr, start_line, end_line, new_lines, instruction)
     })
   end
 
+  -- Resolve the text area width of the window showing this buffer so added
+  -- lines can be padded to the same visual width as line_hl_group on removed lines.
+  local win = vim.fn.bufwinid(bufnr)
+  local win_width = (win ~= -1)
+    and (vim.api.nvim_win_get_width(win) - vim.fn.getwininfo(win)[1].textoff)
+    or 0
+
   -- Compute width dynamically: "──<title>──" needs #title + 4;
   -- each content line needs #("+line"). Uses byte length (correct for ASCII).
   local title = " tau: " .. instruction .. " "
@@ -104,6 +111,7 @@ function M.show_preview(bufnr, start_line, end_line, new_lines, instruction)
   for _, line in ipairs(new_lines) do
     w = math.max(w, #line + 1)  -- "+line"
   end
+  w = math.max(w, win_width)
 
   local sep_top = "──" .. title .. string.rep("─", w - #title - 4) .. "──"
   local sep_mid = string.rep("─", w)
@@ -111,7 +119,9 @@ function M.show_preview(bufnr, start_line, end_line, new_lines, instruction)
   local virt = { { { sep_top, "Comment" } } }
 
   for _, line in ipairs(new_lines) do
-    table.insert(virt, { { "+", "DiffAdd" }, { line ~= "" and line or " ", "DiffAdd" } })
+    local content = line ~= "" and line or " "
+    local padded = content .. string.rep(" ", w - #content - 1)
+    table.insert(virt, { { "+", "DiffAdd" }, { padded, "DiffAdd" } })
   end
 
   table.insert(virt, { { sep_mid, "Comment" } })
