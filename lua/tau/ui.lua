@@ -140,7 +140,9 @@ function M.show_preview(bufnr, start_line, end_line, new_lines, instruction)
         { "<CR>",       "Special" },
         { " accept · ", "Comment" },
         { "<Esc>",      "Special" },
-        { " reject",    "Comment" },
+        { " reject · ", "Comment" },
+        { "<r>",        "Special" },
+        { " regen",     "Comment" },
       },
     },
   })
