@@ -111,7 +111,9 @@ function M.show_preview(bufnr, start_line, end_line, new_lines, instruction)
   local virt = { { { sep_top, "Comment" } } }
 
   for _, line in ipairs(new_lines) do
-    table.insert(virt, { { "+", "DiffAdd" }, { line ~= "" and line or " ", "DiffAdd" } })
+    local content = line ~= "" and line or " "
+    local padded = content .. string.rep(" ", w - #content - 1)
+    table.insert(virt, { { "+", "DiffAdd" }, { padded, "DiffAdd" } })
   end
 
   table.insert(virt, { { sep_mid, "Comment" } })
