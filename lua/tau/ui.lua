@@ -5,8 +5,10 @@ local NS_PREVIEW = vim.api.nvim_create_namespace("tau_preview")
 local SPINNER_FRAMES = { "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏" }
 
 
-local _timer = nil
-local _bufnr = nil
+local _timer      = nil
+local _bufnr      = nil
+local _char_count = 0
+local _start_time = 0
 
 --- Show instruction on cmdline and start spinner above start_line.
 --- @param bufnr integer
@@ -15,6 +17,8 @@ local _bufnr = nil
 function M.start(bufnr, start_line, instruction)
   M.stop()
   vim.api.nvim_buf_clear_namespace(bufnr, NS, 0, -1)
+  _char_count = 0
+  _start_time = vim.uv.now()
   _bufnr = bufnr
   vim.api.nvim_echo({ { "Instruction: " .. instruction } }, false, {})
 
@@ -31,18 +35,29 @@ function M.start(bufnr, start_line, instruction)
     100,
     100,
     vim.schedule_wrap(function()
+      if not _timer then return end
       if not vim.api.nvim_buf_is_valid(bufnr) then
         M.stop()
         return
       end
       frame = (frame % #SPINNER_FRAMES) + 1
+      local elapsed = math.floor((vim.uv.now() - _start_time) / 1000)
+      local label = _char_count > 0
+        and (SPINNER_FRAMES[frame] .. " tau · " .. _char_count .. " chars · " .. elapsed .. "s")
+        or  (SPINNER_FRAMES[frame] .. " tau · " .. elapsed .. "s")
       vim.api.nvim_buf_set_extmark(bufnr, NS, start_line - 1, 0, {
         id = mark_id,
-        virt_lines = { { { SPINNER_FRAMES[frame] .. " tau", "Comment" } } },
+        virt_lines = { { { label, "Comment" } } },
         virt_lines_above = true,
       })
     end)
   )
+end
+
+--- Update streaming char count. Called from on_token.
+--- @param char_count integer
+function M.update_progress(char_count)
+  _char_count = char_count
 end
 
 --- Stop and clear all UI state.
@@ -52,6 +67,8 @@ function M.stop()
     _timer:close()
     _timer = nil
   end
+  _char_count = 0
+  _start_time = 0
   if _bufnr and vim.api.nvim_buf_is_valid(_bufnr) then
     vim.api.nvim_buf_clear_namespace(_bufnr, NS, 0, -1)
   end
