@@ -74,7 +74,9 @@ function M.show_preview(bufnr, start_line, end_line, new_lines, instruction)
     })
   end
 
-  local sep_dash  = string.rep("-", 16) .. "tau" .. string.rep("-", 16)
+  local label     = "tau"
+  local pad       = (SEP_WIDTH - #label) / 2
+  local sep_dash  = string.rep("-", pad) .. label .. string.rep("-", pad)
   local sep_equal = string.rep("=", SEP_WIDTH)
 
   local virt = {

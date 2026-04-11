@@ -15,19 +15,27 @@ local _job = nil
 --- @type { bufnr: integer, start_line: integer, end_line: integer, new_lines: string[] } | nil
 local _pending = nil
 
+--- Clear preview UI unconditionally — safe to call even if _job is nil.
+local function _clear_pending()
+  if not _pending then return end
+  ui.clear_preview(_pending.bufnr)
+  pcall(vim.keymap.del, "n", "<CR>", { buffer = _pending.bufnr })
+  _pending = nil
+end
+
 --- Tear down all in-flight state: stop UI, restore <Esc> mapping, unlock buffer.
 --- @param bufnr integer
 local function _cleanup(bufnr)
+  -- Clear preview before the _job guard so ghost extmarks are never left behind
+  -- if _job has already been set to nil (e.g. double-accept or cancel race).
+  _clear_pending()
   if not _job then return end
-  if _pending then
-    ui.clear_preview(_pending.bufnr)
-    pcall(vim.keymap.del, "n", "<CR>", { buffer = _pending.bufnr })
-    _pending = nil
-  end
   ui.stop()
   pcall(vim.keymap.del, "n", "<Esc>", { buffer = bufnr })
   if _job.prev_esc and _job.prev_esc.lhs and _job.prev_esc.lhs ~= "" then
     if vim.api.nvim_buf_is_valid(bufnr) then
+      -- prev_esc is captured before any <Esc> mapping is installed in _execute.
+      -- Do not move that capture below any vim.keymap.set call or this restore breaks.
       vim.fn.mapset("n", false, _job.prev_esc)
     end
   end
