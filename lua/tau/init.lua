@@ -16,6 +16,9 @@ local _job = nil
 --- @type { bufnr: integer, start_line: integer, end_line: integer, new_lines: string[] } | nil
 local _pending = nil
 
+--- True while a vim.ui.select or vim.ui.input prompt is open, to prevent stacked pickers.
+local _picking = false
+
 --- Clear preview UI unconditionally — safe to call even if _job is nil.
 local function _clear_pending()
   if not _pending then return end
@@ -84,7 +87,7 @@ function M.run(opts)
     return
   end
 
-  if _job then
+  if _job or _picking then
     vim.api.nvim_echo({ { "tau: request already in flight — use :TauCancel first", "WarningMsg" } }, false, {})
     return
   end
@@ -104,28 +107,36 @@ function M.run(opts)
 
   -- Get instruction: from command args, history picker, or prompt
   local instruction = opts.args and opts.args ~= "" and opts.args or nil
+  local hist = history.list()
 
   if instruction then
     M._execute(bufnr, start_line, end_line, instruction)
-  elseif not history.has() then
+  elseif #hist == 0 then
+    _picking = true
     vim.ui.input({ prompt = "Instruction: " }, function(input)
+      _picking = false
       if not input or input == "" then return end
       M._execute(bufnr, start_line, end_line, input)
     end)
   else
-    local NEW_SENTINEL = "[New instruction...]"
-    local choices = { NEW_SENTINEL }
-    for _, v in ipairs(history.list()) do
+    local choices = { history.SENTINEL }
+    for _, v in ipairs(hist) do
       choices[#choices + 1] = v
     end
+    _picking = true
     vim.ui.select(choices, { prompt = "Instruction: " }, function(choice)
-      if not choice then return end
-      if choice == NEW_SENTINEL then
+      if not choice then
+        _picking = false
+        return
+      end
+      if choice == history.SENTINEL then
         vim.ui.input({ prompt = "Instruction: " }, function(input)
+          _picking = false
           if not input or input == "" then return end
           M._execute(bufnr, start_line, end_line, input)
         end)
       else
+        _picking = false
         M._execute(bufnr, start_line, end_line, choice)
       end
     end)
@@ -183,8 +194,6 @@ function M._execute(bufnr, start_line, end_line, instruction)
     return
   end
 
-  history.add(instruction)
-
   local ctx = context.get(bufnr, start_line, end_line)
   local indent = base_indent(ctx.selection.lines)
 
@@ -224,6 +233,8 @@ function M._execute(bufnr, start_line, end_line, instruction)
         _cleanup(bufnr)
         return
       end
+
+      history.add(instruction)
 
       -- Stop spinner; defer full cleanup until accept/reject
       ui.stop()
