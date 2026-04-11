@@ -2,6 +2,7 @@ local context = require("tau.context")
 local runner = require("tau.runner")
 local ui = require("tau.ui")
 local history = require("tau.history")
+local picker = require("tau.picker")
 
 local M = {}
 
@@ -119,26 +120,11 @@ function M.run(opts)
       M._execute(bufnr, start_line, end_line, input)
     end)
   else
-    local choices = { history.SENTINEL }
-    for _, v in ipairs(hist) do
-      choices[#choices + 1] = v
-    end
     _picking = true
-    vim.ui.select(choices, { prompt = "Instruction: " }, function(choice)
-      if not choice then
-        _picking = false
-        return
-      end
-      if choice == history.SENTINEL then
-        vim.ui.input({ prompt = "Instruction: " }, function(input)
-          _picking = false
-          if not input or input == "" then return end
-          M._execute(bufnr, start_line, end_line, input)
-        end)
-      else
-        _picking = false
-        M._execute(bufnr, start_line, end_line, choice)
-      end
+    picker.open(hist, "Instruction:", function(choice)
+      _picking = false
+      if not choice then return end
+      M._execute(bufnr, start_line, end_line, choice)
     end)
   end
 end

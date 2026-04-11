@@ -3,11 +3,8 @@ local M = {}
 local MAX_HISTORY = 50
 local _history = {}
 
-M.SENTINEL = "[New instruction...]"
-
 function M.add(instruction)
   if not instruction or instruction == "" then return end
-  if instruction == M.SENTINEL then return end
   for i = #_history, 1, -1 do
     if _history[i] == instruction then table.remove(_history, i) end
   end
