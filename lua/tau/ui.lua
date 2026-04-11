@@ -2,8 +2,10 @@ local M = {}
 
 local NS         = vim.api.nvim_create_namespace("tau")
 local NS_PREVIEW = vim.api.nvim_create_namespace("tau_preview")
-local SPINNER_FRAMES = { "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏" }
+local NS_ERROR   = vim.api.nvim_create_namespace("tau_error")
 
+local SPINNER_FRAMES         = { "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏" }
+local ERROR_CLEAR_TIMEOUT_MS = 5000
 
 local _timer      = nil
 local _bufnr      = nil
@@ -17,6 +19,7 @@ local _start_time = 0
 function M.start(bufnr, start_line, instruction)
   M.stop()
   vim.api.nvim_buf_clear_namespace(bufnr, NS, 0, -1)
+  vim.api.nvim_buf_clear_namespace(bufnr, NS_ERROR, 0, -1)
   _char_count = 0
   _start_time = vim.uv.now()
   _bufnr = bufnr
@@ -143,11 +146,17 @@ end
 --- @param msg string
 function M.error(bufnr, start_line, msg)
   local trimmed = vim.trim(msg)
-  vim.api.nvim_buf_set_extmark(bufnr, NS, start_line - 1, 0, {
+  vim.api.nvim_buf_clear_namespace(bufnr, NS_ERROR, 0, -1)
+  local id = vim.api.nvim_buf_set_extmark(bufnr, NS_ERROR, start_line - 1, 0, {
     virt_lines = { { { "✗ tau: " .. trimmed, "ErrorMsg" } } },
     virt_lines_above = true,
   })
   vim.api.nvim_echo({ { "tau: " .. trimmed, "ErrorMsg" } }, false, {})
+  vim.defer_fn(function()
+    if vim.api.nvim_buf_is_valid(bufnr) then
+      vim.api.nvim_buf_del_extmark(bufnr, NS_ERROR, id)
+    end
+  end, ERROR_CLEAR_TIMEOUT_MS)
 end
 
 return M
