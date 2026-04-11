@@ -84,7 +84,6 @@ function M.show_preview(bufnr, start_line, end_line, new_lines, instruction)
   end
 
   local sep_top = "──" .. title .. string.rep("─", w - #title - 4) .. "──"
-  local sep_mid = string.rep("─", w)
 
   local virt = { { { sep_top, "Comment" } } }
 
@@ -92,25 +91,18 @@ function M.show_preview(bufnr, start_line, end_line, new_lines, instruction)
     table.insert(virt, { { "+", "DiffAdd" }, { line ~= "" and line or " ", "DiffAdd" } })
   end
 
-  table.insert(virt, { { sep_mid, "Comment" } })
+  -- Accept/reject hint sits between the proposed lines and the original lines
+  table.insert(virt, {
+    { " ",          "Comment" },
+    { "<CR>",       "Special" },
+    { " accept · ", "Comment" },
+    { "<Esc>",      "Special" },
+    { " reject",    "Comment" },
+  })
 
-  -- Virtual block (header + proposed lines + separator) above the selection
   vim.api.nvim_buf_set_extmark(bufnr, NS_PREVIEW, start_line - 1, 0, {
     virt_lines       = virt,
     virt_lines_above = true,
-  })
-
-  -- Accept/reject hint as a virtual line below the selection
-  vim.api.nvim_buf_set_extmark(bufnr, NS_PREVIEW, end_line - 1, 0, {
-    virt_lines = {
-      {
-        { " ",          "Comment" },
-        { "<CR>",       "Special" },
-        { " accept · ", "Comment" },
-        { "<Esc>",      "Special" },
-        { " reject",    "Comment" },
-      },
-    },
   })
 end
 
