@@ -66,6 +66,7 @@ end
 --- @param new_lines string[]
 --- @param instruction string
 function M.show_preview(bufnr, start_line, end_line, new_lines, instruction)
+  -- Per-line extmarks for original (deleted) lines
   for i = start_line - 1, end_line - 1 do
     vim.api.nvim_buf_set_extmark(bufnr, NS_PREVIEW, i, 0, {
       line_hl_group = "DiffDelete",
@@ -74,28 +75,44 @@ function M.show_preview(bufnr, start_line, end_line, new_lines, instruction)
     })
   end
 
-  local label     = "tau"
-  local pad       = (SEP_WIDTH - #label) / 2
-  local sep_dash  = string.rep("-", pad) .. label .. string.rep("-", pad)
-  local sep_equal = string.rep("=", SEP_WIDTH)
+  local inner_w = SEP_WIDTH - 2  -- character width between the │ borders
 
+  -- Top border: ╭─ tau: <instruction> ──...──╮
+  -- Keep at least one ─ before ╮, so max title width is SEP_WIDTH - 4.
+  local title = " tau: " .. instruction .. " "
+  if #title > SEP_WIDTH - 4 then
+    title = " tau: " .. instruction:sub(1, SEP_WIDTH - 12) .. "… "
+  end
+  local sep_top = "╭─" .. title .. string.rep("─", SEP_WIDTH - 3 - #title) .. "╮"
+
+  -- Bottom border: ╰── <CR> accept · <Esc> reject ──...──╯
+  -- Fixed chars: "╰── "(4) + "<CR>"(4) + " accept · "(10) + "<Esc>"(5) + " reject "(8) + "╯"(1) = 32
+  local hint_tail  = string.rep("─", SEP_WIDTH - 32)
   local virt = {
-    { { sep_dash, "Comment" } },
-    { { "instruction: " .. instruction, "Comment" } },
-    {
-      { "====Accept ", "Comment" },
-      { "<CR>",        "Special" },
-      { "====Reject ", "Comment" },
-      { "<Esc>",       "Special" },
-      { "====",        "Comment" },
-    },
+    { { sep_top, "Comment" } },
   }
 
+  -- Content rows: │+line content<pad>│
   for _, line in ipairs(new_lines) do
-    table.insert(virt, { { "+", "DiffAdd" }, { line ~= "" and line or " ", "DiffAdd" } })
+    local content = "+" .. (line ~= "" and line or " ")
+    if #content > inner_w then
+      content = content:sub(1, inner_w - 1) .. "…"
+    end
+    table.insert(virt, {
+      { "│",                                          "Comment" },
+      { content .. string.rep(" ", inner_w - #content), "DiffAdd" },
+      { "│",                                          "Comment" },
+    })
   end
 
-  table.insert(virt, { { sep_equal, "Comment" } })
+  -- Bottom border with accept/reject hint
+  table.insert(virt, {
+    { "╰── ",                      "Comment" },
+    { "<CR>",                       "Special" },
+    { " accept · ",                 "Comment" },
+    { "<Esc>",                      "Special" },
+    { " reject " .. hint_tail .. "╯", "Comment" },
+  })
 
   vim.api.nvim_buf_set_extmark(bufnr, NS_PREVIEW, start_line - 1, 0, {
     virt_lines       = virt,
