@@ -1,6 +1,7 @@
 local M = {}
 
 local NS = vim.api.nvim_create_namespace("tau_picker")
+local _aug_id = 0  -- counter for unique augroup names
 
 --- @param items string[]
 --- @param prompt string
@@ -10,6 +11,11 @@ function M.open(items, prompt, on_choice)
   local filtered = {}
   local closed = false
 
+  -- Unique augroup name per invocation to prevent collision
+  _aug_id = _aug_id + 1
+  local aug_name = "tau_picker_" .. _aug_id
+
+  -- fixed at open time so the window does not resize on every keystroke
   local width     = math.max(40, math.min(70, vim.o.columns - 6))
   local max_rows  = math.min(10, #items)
   local start_row = math.floor((vim.o.lines - (max_rows + 5)) / 2)
@@ -18,8 +24,8 @@ function M.open(items, prompt, on_choice)
   -- Buffers
   local input_buf   = vim.api.nvim_create_buf(false, true)
   local results_buf = vim.api.nvim_create_buf(false, true)
-  vim.bo[input_buf].bufhidden   = "wipe"
-  vim.bo[results_buf].bufhidden = "wipe"
+  vim.bo[input_buf].bufhidden    = "wipe"
+  vim.bo[results_buf].bufhidden  = "wipe"
   vim.bo[results_buf].modifiable = false
 
   -- Windows
@@ -59,7 +65,7 @@ function M.open(items, prompt, on_choice)
         filtered[#filtered + 1] = item
       end
     end
-    sel = math.max(1, math.min(sel, math.max(1, #filtered)))
+    sel = 1  -- reset selection on every refilter (text changed or initial open)
   end
 
   local function render()
@@ -89,7 +95,8 @@ function M.open(items, prompt, on_choice)
   local function close()
     if closed then return end
     closed = true
-    pcall(vim.api.nvim_del_augroup_by_name, "tau_picker")
+    vim.cmd("stopinsert")
+    pcall(vim.api.nvim_del_augroup_by_name, aug_name)
     if vim.api.nvim_win_is_valid(results_win) then
       vim.api.nvim_win_close(results_win, true)
     end
@@ -97,6 +104,9 @@ function M.open(items, prompt, on_choice)
       vim.api.nvim_win_close(input_win, true)
     end
   end
+
+  -- forward-declare so confirm() can reference cancel() safely
+  local cancel
 
   local function confirm()
     local choice
@@ -113,7 +123,7 @@ function M.open(items, prompt, on_choice)
     vim.schedule(function() on_choice(choice) end)
   end
 
-  local function cancel()
+  cancel = function()
     close()
     vim.schedule(function() on_choice(nil) end)
   end
@@ -131,8 +141,8 @@ function M.open(items, prompt, on_choice)
   vim.keymap.set("n", "<Esc>",  cancel, imo)
   vim.keymap.set("n", "q",      cancel, imo)
 
-  -- Keymaps — results window
-  local rmo = { buffer = results_buf, noremap = true, silent = true }
+  -- Keymaps — results window (nowait to override any global j/k mappings)
+  local rmo = { buffer = results_buf, noremap = true, silent = true, nowait = true }
   vim.keymap.set("n", "<CR>",  confirm, rmo)
   vim.keymap.set("n", "<Esc>", cancel,  rmo)
   vim.keymap.set("n", "q",     cancel,  rmo)
@@ -144,12 +154,12 @@ function M.open(items, prompt, on_choice)
   end, rmo)
 
   -- Autocmds
-  local aug = vim.api.nvim_create_augroup("tau_picker", { clear = true })
+  local aug = vim.api.nvim_create_augroup(aug_name, { clear = true })
 
   vim.api.nvim_create_autocmd({ "TextChangedI", "TextChanged" }, {
     buffer   = input_buf,
     group    = aug,
-    callback = function() sel = 1; refilter(); render() end,
+    callback = function() refilter(); render() end,
   })
 
   -- Cancel if focus moves outside both picker windows

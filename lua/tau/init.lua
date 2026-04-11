@@ -17,7 +17,7 @@ local _job = nil
 --- @type { bufnr: integer, start_line: integer, end_line: integer, new_lines: string[] } | nil
 local _pending = nil
 
---- True while a vim.ui.select or vim.ui.input prompt is open, to prevent stacked pickers.
+--- True while a picker or vim.ui.input prompt is open, to prevent stacked pickers.
 local _picking = false
 
 --- Clear preview UI unconditionally — safe to call even if _job is nil.
