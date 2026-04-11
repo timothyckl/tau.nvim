@@ -3,7 +3,10 @@ local M = {}
 local NS         = vim.api.nvim_create_namespace("tau")
 local NS_PREVIEW = vim.api.nvim_create_namespace("tau_preview")
 local SPINNER_FRAMES = { "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏" }
-local SEP_WIDTH = 35
+
+-- Minimum box width: cell-width of the bottom hint with no extra padding dashes.
+-- "╰── "(4) + "<CR>"(4) + " accept · "(10) + "<Esc>"(5) + " reject ──╯"(11) = 34
+local HINT_MIN_W = 34
 
 local _timer = nil
 local _bufnr = nil
@@ -75,43 +78,38 @@ function M.show_preview(bufnr, start_line, end_line, new_lines, instruction)
     })
   end
 
-  local inner_w = SEP_WIDTH - 2  -- character width between the │ borders
-
-  -- Top border: ╭─ tau: <instruction> ──...──╮
-  -- Keep at least one ─ before ╮, so max title width is SEP_WIDTH - 4.
+  -- Compute box width from content (uses byte length, correct for ASCII).
+  -- Top needs: "╭─" + title + at_least_one_"─" + "╮" → min w = #title + 4
   local title = " tau: " .. instruction .. " "
-  if #title > SEP_WIDTH - 4 then
-    title = " tau: " .. instruction:sub(1, SEP_WIDTH - 12) .. "… "
+  local w = math.max(HINT_MIN_W, #title + 4)
+  for _, line in ipairs(new_lines) do
+    w = math.max(w, #line + 1 + 2)  -- "+line" between "│" borders
   end
-  local sep_top = "╭─" .. title .. string.rep("─", SEP_WIDTH - 3 - #title) .. "╮"
 
-  -- Bottom border: ╰── <CR> accept · <Esc> reject ──...──╯
-  -- Fixed chars: "╰── "(4) + "<CR>"(4) + " accept · "(10) + "<Esc>"(5) + " reject "(8) + "╯"(1) = 32
-  local hint_tail  = string.rep("─", SEP_WIDTH - 32)
-  local virt = {
-    { { sep_top, "Comment" } },
-  }
+  local inner_w = w - 2  -- cell width between the │ borders
 
-  -- Content rows: │+line content<pad>│
+  -- Top border: ╭─<title>──...──╮
+  local sep_top = "╭─" .. title .. string.rep("─", w - 3 - #title) .. "╮"
+
+  local virt = { { { sep_top, "Comment" } } }
+
+  -- Content rows: │+line<pad>│
   for _, line in ipairs(new_lines) do
     local content = "+" .. (line ~= "" and line or " ")
-    if #content > inner_w then
-      content = content:sub(1, inner_w - 1) .. "…"
-    end
     table.insert(virt, {
-      { "│",                                          "Comment" },
+      { "│",                                             "Comment" },
       { content .. string.rep(" ", inner_w - #content), "DiffAdd" },
-      { "│",                                          "Comment" },
+      { "│",                                             "Comment" },
     })
   end
 
-  -- Bottom border with accept/reject hint
+  -- Bottom border: ╰── <CR> accept · <Esc> reject ──...──╯
   table.insert(virt, {
-    { "╰── ",                      "Comment" },
-    { "<CR>",                       "Special" },
-    { " accept · ",                 "Comment" },
-    { "<Esc>",                      "Special" },
-    { " reject " .. hint_tail .. "╯", "Comment" },
+    { "╰── ",                                        "Comment" },
+    { "<CR>",                                         "Special" },
+    { " accept · ",                                   "Comment" },
+    { "<Esc>",                                        "Special" },
+    { " reject " .. string.rep("─", w - HINT_MIN_W) .. "──╯", "Comment" },
   })
 
   vim.api.nvim_buf_set_extmark(bufnr, NS_PREVIEW, start_line - 1, 0, {
