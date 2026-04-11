@@ -1,7 +1,9 @@
 local M = {}
 
-local NS = vim.api.nvim_create_namespace("tau")
+local NS         = vim.api.nvim_create_namespace("tau")
+local NS_PREVIEW = vim.api.nvim_create_namespace("tau_preview")
 local SPINNER_FRAMES = { "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏" }
+local SEP_WIDTH = 35
 
 local _timer = nil
 local _bufnr = nil
@@ -54,6 +56,51 @@ function M.stop()
     vim.api.nvim_buf_clear_namespace(_bufnr, NS, 0, -1)
   end
   _bufnr = nil
+end
+
+--- Show inline diff: a virtual block above the selection (header + prompt + new lines + separator),
+--- with the original buffer lines highlighted as deleted beneath it.
+--- @param bufnr integer
+--- @param start_line integer 1-indexed
+--- @param end_line integer 1-indexed
+--- @param new_lines string[]
+--- @param instruction string
+function M.show_preview(bufnr, start_line, end_line, new_lines, instruction)
+  for i = start_line - 1, end_line - 1 do
+    vim.api.nvim_buf_add_highlight(bufnr, NS_PREVIEW, "DiffDelete", i, 0, -1)
+  end
+
+  local sep_dash  = string.rep("-", 16) .. "tau" .. string.rep("-", 16)
+  local sep_equal = string.rep("=", SEP_WIDTH)
+
+  local virt = {
+    { { sep_dash, "Comment" } },
+    { { "instruction: " .. instruction, "Comment" } },
+    {
+      { "====Accept ", "Comment" },
+      { "<CR>",        "Special" },
+      { "====Reject ", "Comment" },
+      { "<Esc>",       "Special" },
+      { "====",        "Comment" },
+    },
+  }
+
+  for _, line in ipairs(new_lines) do
+    table.insert(virt, { { line ~= "" and line or " ", "DiffAdd" } })
+  end
+
+  table.insert(virt, { { sep_equal, "Comment" } })
+
+  vim.api.nvim_buf_set_extmark(bufnr, NS_PREVIEW, start_line - 1, 0, {
+    virt_lines       = virt,
+    virt_lines_above = true,
+  })
+end
+
+--- Clear all preview highlights and virtual lines.
+--- @param bufnr integer
+function M.clear_preview(bufnr)
+  vim.api.nvim_buf_clear_namespace(bufnr, NS_PREVIEW, 0, -1)
 end
 
 --- Show an error as virtual text above the selection and on the cmdline.
