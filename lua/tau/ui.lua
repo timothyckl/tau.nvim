@@ -67,7 +67,11 @@ end
 --- @param instruction string
 function M.show_preview(bufnr, start_line, end_line, new_lines, instruction)
   for i = start_line - 1, end_line - 1 do
-    vim.api.nvim_buf_add_highlight(bufnr, NS_PREVIEW, "DiffDelete", i, 0, -1)
+    vim.api.nvim_buf_set_extmark(bufnr, NS_PREVIEW, i, 0, {
+      line_hl_group = "DiffDelete",
+      virt_text     = { { "-", "DiffDelete" } },
+      virt_text_pos = "inline",
+    })
   end
 
   local sep_dash  = string.rep("-", 16) .. "tau" .. string.rep("-", 16)
@@ -86,7 +90,7 @@ function M.show_preview(bufnr, start_line, end_line, new_lines, instruction)
   }
 
   for _, line in ipairs(new_lines) do
-    table.insert(virt, { { line ~= "" and line or " ", "DiffAdd" } })
+    table.insert(virt, { { "+", "DiffAdd" }, { line ~= "" and line or " ", "DiffAdd" } })
   end
 
   table.insert(virt, { { sep_equal, "Comment" } })
