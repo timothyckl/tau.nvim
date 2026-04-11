@@ -45,7 +45,9 @@ function M.start(bufnr, start_line, instruction)
       local label = _char_count > 0
         and (SPINNER_FRAMES[frame] .. " tau · " .. _char_count .. " chars · " .. elapsed .. "s")
         or  (SPINNER_FRAMES[frame] .. " tau · " .. elapsed .. "s")
-      vim.api.nvim_buf_set_extmark(bufnr, NS, start_line - 1, 0, {
+      local pos = vim.api.nvim_buf_get_extmark_by_id(bufnr, NS, mark_id, {})
+      local row = (pos and #pos > 0) and pos[1] or (start_line - 1)
+      vim.api.nvim_buf_set_extmark(bufnr, NS, row, 0, {
         id = mark_id,
         virt_lines = { { { label, "Comment" } } },
         virt_lines_above = true,

@@ -7,9 +7,10 @@ local M = {}
 --- @type table
 local config = {}
 
-local SIGTERM = 15
+local SIGTERM  = 15
+local NS_TRACK = vim.api.nvim_create_namespace("tau_track")
 
---- @type { handle: vim.SystemObj|nil, bufnr: integer, cancelled: boolean, prev_esc: table } | nil
+--- @type { handle: vim.SystemObj|nil, bufnr: integer, cancelled: boolean, prev_esc: table, mark_start: integer, mark_end: integer } | nil
 local _job = nil
 
 --- @type { bufnr: integer, start_line: integer, end_line: integer, new_lines: string[] } | nil
@@ -21,6 +22,19 @@ local function _clear_pending()
   ui.clear_preview(_pending.bufnr)
   pcall(vim.keymap.del, "n", "<CR>", { buffer = _pending.bufnr })
   _pending = nil
+end
+
+--- Read current selection boundaries from tracking extmarks.
+--- Returns nil, nil if _job is absent or buffer is invalid.
+--- @param bufnr integer
+--- @return integer|nil, integer|nil  1-indexed start_line, end_line
+local function get_tracked_range(bufnr)
+  if not _job then return nil, nil end
+  if not vim.api.nvim_buf_is_valid(bufnr) then return nil, nil end
+  local s = vim.api.nvim_buf_get_extmark_by_id(bufnr, NS_TRACK, _job.mark_start, {})
+  local e = vim.api.nvim_buf_get_extmark_by_id(bufnr, NS_TRACK, _job.mark_end,   {})
+  if not s or #s == 0 or not e or #e == 0 then return nil, nil end
+  return s[1] + 1, e[1] + 1
 end
 
 --- Tear down all in-flight state: stop UI, restore <Esc> mapping, unlock buffer.
@@ -39,19 +53,25 @@ local function _cleanup(bufnr)
       vim.fn.mapset("n", false, _job.prev_esc)
     end
   end
-  vim.bo[bufnr].modifiable = true
+  if vim.api.nvim_buf_is_valid(bufnr) then
+    vim.api.nvim_buf_clear_namespace(bufnr, NS_TRACK, 0, -1)
+  end
   _job = nil
 end
 
 local function _accept()
   if not _pending then return end
   local p = _pending
+  -- Read extmark positions BEFORE _cleanup() clears NS_TRACK
+  local cur_start, cur_end = get_tracked_range(p.bufnr)
+  local final_start = cur_start or p.start_line
+  local final_end   = cur_end   or p.end_line
   _cleanup(p.bufnr)
   if not vim.api.nvim_buf_is_valid(p.bufnr) then
     vim.api.nvim_echo({ { "tau: buffer was closed, replacement lost", "ErrorMsg" } }, false, {})
     return
   end
-  local ok, err = pcall(vim.api.nvim_buf_set_lines, p.bufnr, p.start_line - 1, p.end_line, false, p.new_lines)
+  local ok, err = pcall(vim.api.nvim_buf_set_lines, p.bufnr, final_start - 1, final_end, false, p.new_lines)
   if not ok then
     vim.api.nvim_echo({ { "tau: failed to apply replacement: " .. tostring(err), "ErrorMsg" } }, false, {})
   end
@@ -170,8 +190,13 @@ function M._execute(bufnr, start_line, end_line, instruction)
   local ctx = context.get(bufnr, start_line, end_line)
   local indent = base_indent(ctx.selection.lines)
 
-  -- Lock the buffer to prevent line number drift during async operation
-  vim.bo[bufnr].modifiable = false
+  -- Place tracking extmarks to follow selection boundaries as user edits outside the region
+  local mark_start = vim.api.nvim_buf_set_extmark(bufnr, NS_TRACK, start_line - 1, 0, {
+    right_gravity = false,
+  })
+  local mark_end = vim.api.nvim_buf_set_extmark(bufnr, NS_TRACK, end_line - 1, 0, {
+    right_gravity = true,
+  })
 
   -- Start UI: cmdline + spinner
   ui.start(bufnr, start_line, instruction)
@@ -182,7 +207,8 @@ function M._execute(bufnr, start_line, end_line, instruction)
   -- process exits before vim.system returns on this tick. handle is filled in
   -- below after runner.run() returns.
   local prev_esc = vim.fn.maparg("<Esc>", "n", false, true)
-  _job = { handle = nil, bufnr = bufnr, cancelled = false, prev_esc = prev_esc }
+  _job = { handle = nil, bufnr = bufnr, cancelled = false, prev_esc = prev_esc,
+           mark_start = mark_start, mark_end = mark_end }
 
   local handle = runner.run({
     config = config,
@@ -218,8 +244,12 @@ function M._execute(bufnr, start_line, end_line, instruction)
 
         local new_lines = reindent(vim.split(text, "\n", { plain = true }), indent)
 
-        _pending = { bufnr = bufnr, start_line = start_line, end_line = end_line, new_lines = new_lines }
-        ui.show_preview(bufnr, start_line, end_line, new_lines, instruction)
+        local cur_start, cur_end = get_tracked_range(bufnr)
+        local final_start = cur_start or start_line
+        local final_end   = cur_end   or end_line
+
+        _pending = { bufnr = bufnr, start_line = final_start, end_line = final_end, new_lines = new_lines }
+        ui.show_preview(bufnr, final_start, final_end, new_lines, instruction)
 
         -- <Esc> now rejects instead of cancels; <CR> accepts
         vim.keymap.set("n", "<Esc>", _reject,
@@ -244,7 +274,6 @@ function M._execute(bufnr, start_line, end_line, instruction)
         ui.error(bufnr, start_line, msg)
       end)
       if not ok then
-        pcall(function() vim.bo[bufnr].modifiable = true end)
         vim.api.nvim_echo({ { "tau: " .. tostring(err), "ErrorMsg" } }, false, {})
       end
     end,
