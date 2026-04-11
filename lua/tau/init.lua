@@ -1,6 +1,7 @@
 local context = require("tau.context")
 local runner = require("tau.runner")
 local ui = require("tau.ui")
+local history = require("tau.history")
 
 local M = {}
 
@@ -101,18 +102,33 @@ function M.run(opts)
     return
   end
 
-  -- Get instruction: from command args or prompt
+  -- Get instruction: from command args, history picker, or prompt
   local instruction = opts.args and opts.args ~= "" and opts.args or nil
 
-  if not instruction then
+  if instruction then
+    M._execute(bufnr, start_line, end_line, instruction)
+  elseif not history.has() then
     vim.ui.input({ prompt = "Instruction: " }, function(input)
-      if not input or input == "" then
-        return -- user cancelled
-      end
+      if not input or input == "" then return end
       M._execute(bufnr, start_line, end_line, input)
     end)
   else
-    M._execute(bufnr, start_line, end_line, instruction)
+    local NEW_SENTINEL = "[New instruction...]"
+    local choices = { NEW_SENTINEL }
+    for _, v in ipairs(history.list()) do
+      choices[#choices + 1] = v
+    end
+    vim.ui.select(choices, { prompt = "Instruction: " }, function(choice)
+      if not choice then return end
+      if choice == NEW_SENTINEL then
+        vim.ui.input({ prompt = "Instruction: " }, function(input)
+          if not input or input == "" then return end
+          M._execute(bufnr, start_line, end_line, input)
+        end)
+      else
+        M._execute(bufnr, start_line, end_line, choice)
+      end
+    end)
   end
 end
 
@@ -166,6 +182,8 @@ function M._execute(bufnr, start_line, end_line, instruction)
     vim.api.nvim_echo({ { "tau: request already in flight", "WarningMsg" } }, false, {})
     return
   end
+
+  history.add(instruction)
 
   local ctx = context.get(bufnr, start_line, end_line)
   local indent = base_indent(ctx.selection.lines)
