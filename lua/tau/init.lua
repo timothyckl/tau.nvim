@@ -20,17 +20,38 @@ local _pending = nil
 local function _cleanup(bufnr)
   if not _job then return end
   if _pending then
-    ui.clear_preview(bufnr)
-    pcall(vim.keymap.del, "n", "<CR>", { buffer = bufnr })
+    ui.clear_preview(_pending.bufnr)
+    pcall(vim.keymap.del, "n", "<CR>", { buffer = _pending.bufnr })
     _pending = nil
   end
   ui.stop()
   pcall(vim.keymap.del, "n", "<Esc>", { buffer = bufnr })
   if _job.prev_esc and _job.prev_esc.lhs and _job.prev_esc.lhs ~= "" then
-    vim.fn.mapset("n", false, _job.prev_esc)
+    if vim.api.nvim_buf_is_valid(bufnr) then
+      vim.fn.mapset("n", false, _job.prev_esc)
+    end
   end
   vim.bo[bufnr].modifiable = true
   _job = nil
+end
+
+local function _accept()
+  if not _pending then return end
+  local p = _pending
+  _cleanup(p.bufnr)
+  if not vim.api.nvim_buf_is_valid(p.bufnr) then
+    vim.api.nvim_echo({ { "tau: buffer was closed, replacement lost", "ErrorMsg" } }, false, {})
+    return
+  end
+  local ok, err = pcall(vim.api.nvim_buf_set_lines, p.bufnr, p.start_line - 1, p.end_line, false, p.new_lines)
+  if not ok then
+    vim.api.nvim_echo({ { "tau: failed to apply replacement: " .. tostring(err), "ErrorMsg" } }, false, {})
+  end
+end
+
+local function _reject()
+  if not _pending then return end
+  _cleanup(_pending.bufnr)
 end
 
 --- Configure the plugin. Must be called before using :Tau.
@@ -185,9 +206,9 @@ function M._execute(bufnr, start_line, end_line, instruction)
         ui.show_preview(bufnr, start_line, end_line, new_lines, instruction)
 
         -- <Esc> now rejects instead of cancels; <CR> accepts
-        vim.keymap.set("n", "<Esc>", function() M._reject() end,
+        vim.keymap.set("n", "<Esc>", _reject,
           { buffer = bufnr, noremap = true, silent = true, desc = "tau: reject replacement" })
-        vim.keymap.set("n", "<CR>", function() M._accept() end,
+        vim.keymap.set("n", "<CR>", _accept,
           { buffer = bufnr, noremap = true, silent = true, desc = "tau: accept replacement" })
       end)
       if not ok then
@@ -218,20 +239,6 @@ function M._execute(bufnr, start_line, end_line, instruction)
   vim.keymap.set("n", "<Esc>", function()
     require("tau").cancel()
   end, { buffer = bufnr, noremap = true, silent = true, desc = "tau: cancel request" })
-end
-
---- Accept the pending replacement: apply new lines and tear down preview.
-function M._accept()
-  if not _pending then return end
-  local p = _pending
-  _cleanup(p.bufnr)
-  pcall(vim.api.nvim_buf_set_lines, p.bufnr, p.start_line - 1, p.end_line, false, p.new_lines)
-end
-
---- Reject the pending replacement: tear down preview, leave buffer unchanged.
-function M._reject()
-  if not _pending then return end
-  _cleanup(_pending.bufnr)
 end
 
 --- Cancel the in-flight request, if any.
