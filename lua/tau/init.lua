@@ -195,6 +195,9 @@ function M._execute(bufnr, start_line, end_line, instruction)
 
     on_token = function(chunk)
       accumulated = accumulated .. chunk
+      vim.schedule(function()
+        ui.update_progress(#accumulated)
+      end)
     end,
 
     on_done = function()
