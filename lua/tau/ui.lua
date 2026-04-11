@@ -4,9 +4,6 @@ local NS         = vim.api.nvim_create_namespace("tau")
 local NS_PREVIEW = vim.api.nvim_create_namespace("tau_preview")
 local SPINNER_FRAMES = { "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏" }
 
--- Minimum box width: cell-width of the bottom hint with no extra padding dashes.
--- "╰── "(4) + "<CR>"(4) + " accept · "(10) + "<Esc>"(5) + " reject ──╯"(11) = 34
-local HINT_MIN_W = 34
 
 local _timer = nil
 local _bufnr = nil
@@ -78,43 +75,42 @@ function M.show_preview(bufnr, start_line, end_line, new_lines, instruction)
     })
   end
 
-  -- Compute box width from content (uses byte length, correct for ASCII).
-  -- Top needs: "╭─" + title + at_least_one_"─" + "╮" → min w = #title + 4
+  -- Compute width dynamically: "──<title>──" needs #title + 4;
+  -- each content line needs #("+line"). Uses byte length (correct for ASCII).
   local title = " tau: " .. instruction .. " "
-  local w = math.max(HINT_MIN_W, #title + 4)
+  local w = #title + 4
   for _, line in ipairs(new_lines) do
-    w = math.max(w, #line + 1 + 2)  -- "+line" between "│" borders
+    w = math.max(w, #line + 1)  -- "+line"
   end
 
-  local inner_w = w - 2  -- cell width between the │ borders
-
-  -- Top border: ╭─<title>──...──╮
-  local sep_top = "╭─" .. title .. string.rep("─", w - 3 - #title) .. "╮"
+  local sep_top = "──" .. title .. string.rep("─", w - #title - 4) .. "──"
+  local sep_mid = string.rep("─", w)
 
   local virt = { { { sep_top, "Comment" } } }
 
-  -- Content rows: │+line<pad>│
   for _, line in ipairs(new_lines) do
-    local content = "+" .. (line ~= "" and line or " ")
-    table.insert(virt, {
-      { "│",                                             "Comment" },
-      { content .. string.rep(" ", inner_w - #content), "DiffAdd" },
-      { "│",                                             "Comment" },
-    })
+    table.insert(virt, { { "+", "DiffAdd" }, { line ~= "" and line or " ", "DiffAdd" } })
   end
 
-  -- Bottom border: ╰── <CR> accept · <Esc> reject ──...──╯
-  table.insert(virt, {
-    { "╰── ",                                        "Comment" },
-    { "<CR>",                                         "Special" },
-    { " accept · ",                                   "Comment" },
-    { "<Esc>",                                        "Special" },
-    { " reject " .. string.rep("─", w - HINT_MIN_W) .. "──╯", "Comment" },
-  })
+  table.insert(virt, { { sep_mid, "Comment" } })
 
+  -- Virtual block (header + proposed lines + separator) above the selection
   vim.api.nvim_buf_set_extmark(bufnr, NS_PREVIEW, start_line - 1, 0, {
     virt_lines       = virt,
     virt_lines_above = true,
+  })
+
+  -- Accept/reject hint as a virtual line below the selection
+  vim.api.nvim_buf_set_extmark(bufnr, NS_PREVIEW, end_line - 1, 0, {
+    virt_lines = {
+      {
+        { " ",          "Comment" },
+        { "<CR>",       "Special" },
+        { " accept · ", "Comment" },
+        { "<Esc>",      "Special" },
+        { " reject",    "Comment" },
+      },
+    },
   })
 end
 
