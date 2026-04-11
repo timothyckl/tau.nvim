@@ -83,6 +83,11 @@ function M.run(opts)
     return
   end
 
+  if _job then
+    vim.api.nvim_echo({ { "tau: request already in flight — use :TauCancel first", "WarningMsg" } }, false, {})
+    return
+  end
+
   local bufnr = vim.api.nvim_get_current_buf()
 
   -- Capture selection line numbers synchronously before any async call.
