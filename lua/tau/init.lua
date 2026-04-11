@@ -15,7 +15,7 @@ local NS_TRACK = vim.api.nvim_create_namespace("tau_track")
 --- @type { handle: vim.SystemObj|nil, bufnr: integer, cancelled: boolean, prev_esc: table, mark_start: integer, mark_end: integer } | nil
 local _job = nil
 
---- @type { bufnr: integer, start_line: integer, end_line: integer, new_lines: string[] } | nil
+--- @type { bufnr: integer, start_line: integer, end_line: integer, new_lines: string[], instruction: string } | nil
 local _pending = nil
 
 --- True while a picker or vim.ui.input prompt is open, to prevent stacked pickers.
@@ -26,6 +26,7 @@ local function _clear_pending()
   if not _pending then return end
   ui.clear_preview(_pending.bufnr)
   pcall(vim.keymap.del, "n", "<CR>", { buffer = _pending.bufnr })
+  pcall(vim.keymap.del, "n", "r",    { buffer = _pending.bufnr })
   _pending = nil
 end
 
@@ -85,6 +86,16 @@ end
 local function _reject()
   if not _pending then return end
   _cleanup(_pending.bufnr)
+end
+
+local function _regen()
+  if not _pending then return end
+  local p = _pending
+  local cur_start, cur_end = get_tracked_range(p.bufnr)
+  local final_start = cur_start or p.start_line
+  local final_end   = cur_end   or p.end_line
+  _cleanup(p.bufnr)
+  M._execute(p.bufnr, final_start, final_end, p.instruction)
 end
 
 --- Configure the plugin. Must be called before using :Tau.
@@ -263,7 +274,7 @@ function M._execute(bufnr, start_line, end_line, instruction)
         local final_start = cur_start or start_line
         local final_end   = cur_end   or end_line
 
-        _pending = { bufnr = bufnr, start_line = final_start, end_line = final_end, new_lines = new_lines }
+        _pending = { bufnr = bufnr, start_line = final_start, end_line = final_end, new_lines = new_lines, instruction = instruction }
         ui.show_preview(bufnr, final_start, final_end, new_lines, instruction)
 
         -- <Esc> now rejects instead of cancels; <CR> accepts
@@ -271,6 +282,8 @@ function M._execute(bufnr, start_line, end_line, instruction)
           { buffer = bufnr, noremap = true, silent = true, desc = "tau: reject replacement" })
         vim.keymap.set("n", "<CR>", _accept,
           { buffer = bufnr, noremap = true, silent = true, desc = "tau: accept replacement" })
+        vim.keymap.set("n", "r", _regen,
+          { buffer = bufnr, noremap = true, silent = true, desc = "tau: regen replacement" })
       end)
       if not ok then
         _cleanup(bufnr)
