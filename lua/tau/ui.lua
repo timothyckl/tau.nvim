@@ -12,18 +12,16 @@ local _bufnr      = nil
 local _char_count = 0
 local _start_time = 0
 
---- Show instruction on cmdline and start spinner above start_line.
+--- Start spinner above start_line.
 --- @param bufnr integer
 --- @param start_line integer 1-indexed
---- @param instruction string
-function M.start(bufnr, start_line, instruction)
+function M.start(bufnr, start_line)
   M.stop()
   vim.api.nvim_buf_clear_namespace(bufnr, NS, 0, -1)
   vim.api.nvim_buf_clear_namespace(bufnr, NS_ERROR, 0, -1)
   _char_count = 0
   _start_time = vim.uv.now()
   _bufnr = bufnr
-  vim.api.nvim_echo({ { "Instruction: " .. instruction } }, false, {})
 
   local frame = 1
 
@@ -167,7 +165,7 @@ end
 --- @param start_line integer 1-indexed
 --- @param msg string
 function M.error(bufnr, start_line, msg)
-  local trimmed = vim.trim(msg)
+  local trimmed = vim.trim(msg):gsub("^tau:%s*", "")
   vim.api.nvim_buf_clear_namespace(bufnr, NS_ERROR, 0, -1)
   local id = vim.api.nvim_buf_set_extmark(bufnr, NS_ERROR, start_line - 1, 0, {
     virt_lines = { { { "✗ tau: " .. trimmed, "ErrorMsg" } } },
