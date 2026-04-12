@@ -61,10 +61,6 @@ async function main() {
   const opts = parseArgs(process.argv)
 
   const selection = await readStdin()
-  if (!selection.trim()) {
-    process.stderr.write("tau: no input on stdin\n")
-    process.exit(1)
-  }
 
   const apiUrl = process.env.TAU_API_URL
   const apiKey = process.env.TAU_API_KEY
@@ -79,7 +75,7 @@ async function main() {
     process.exit(1)
   }
 
-  const systemPrompt = buildSystemPrompt({ filename: opts.filename, filetype: opts.filetype })
+  const systemPrompt = buildSystemPrompt({ filename: opts.filename, filetype: opts.filetype, selectionEmpty: !selection.trim() })
   const userMessage = buildUserMessage({
     selection,
     instruction: opts.instruction,

@@ -30,6 +30,18 @@ describe("buildUserMessage", () => {
     expect(result).toContain("[Instruction]")
   })
 
+  test("handles empty selection", () => {
+    const result = buildUserMessage({
+      selection: "",
+      instruction: "add a constructor",
+      contextAbove: "class Foo {",
+      contextBelow: "}",
+    })
+    expect(result).toContain("[Selected code]")
+    expect(result).toContain("[Instruction]")
+    expect(result).toContain("add a constructor")
+  })
+
   test("sections appear in correct order", () => {
     const result = buildUserMessage({
       selection: "SEL",
