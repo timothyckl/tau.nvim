@@ -15,6 +15,7 @@ Using [lazy.nvim](https://github.com/folke/lazy.nvim):
 ```lua
 {
   "timothyckl/tau.nvim",
+  lazy = false,
   build = "cd cli && bun build --compile src/index.ts --outfile tau",
   config = function()
     require("tau").setup({
