@@ -18,7 +18,7 @@ local _job = nil
 --- @type { bufnr: integer, start_line: integer, end_line: integer, new_lines: string[], instruction: string } | nil
 local _pending = nil
 
---- True while a picker or vim.ui.input prompt is open, to prevent stacked pickers.
+--- True while the instruction picker is open, to prevent stacked invocations.
 local _picking = false
 
 --- Clear preview UI unconditionally — safe to call even if _job is nil.
@@ -137,19 +137,12 @@ function M.run(opts)
     return
   end
 
-  -- Get instruction: from command args, history picker, or prompt
+  -- Get instruction: from command args or history picker
   local instruction = opts.args and opts.args ~= "" and opts.args or nil
   local hist = history.list()
 
   if instruction then
     M._execute(bufnr, start_line, end_line, instruction)
-  elseif #hist == 0 then
-    _picking = true
-    vim.ui.input({ prompt = "Instruction: " }, function(input)
-      _picking = false
-      if not input or input == "" then return end
-      M._execute(bufnr, start_line, end_line, input)
-    end)
   else
     _picking = true
     picker.open(hist, "Instruction:", function(choice)

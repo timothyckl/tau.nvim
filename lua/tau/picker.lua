@@ -17,7 +17,7 @@ function M.open(items, prompt, on_choice)
 
   -- fixed at open time so the window does not resize on every keystroke
   local width     = math.max(40, math.min(70, vim.o.columns - 6))
-  local max_rows  = math.min(10, #items)
+  local max_rows  = math.max(1, math.min(10, #items))
   local start_row = math.floor((vim.o.lines - (max_rows + 5)) / 2)
   local start_col = math.floor((vim.o.columns - width - 2) / 2)
 
