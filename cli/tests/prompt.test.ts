@@ -29,4 +29,10 @@ describe("buildSystemPrompt", () => {
     const result = buildSystemPrompt({})
     expect(result).toContain("No markdown fences")
   })
+
+  test("uses insert phrasing when selection is empty", () => {
+    const result = buildSystemPrompt({ selectionEmpty: true })
+    expect(result).toContain("empty")
+    expect(result).not.toContain("replacement")
+  })
 })

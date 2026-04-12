@@ -88,13 +88,21 @@ end
 --- @param new_lines string[]
 --- @param instruction string
 function M.show_preview(bufnr, start_line, end_line, new_lines, instruction)
-  -- Per-line extmarks for original (deleted) lines
-  for i = start_line - 1, end_line - 1 do
-    vim.api.nvim_buf_set_extmark(bufnr, NS_PREVIEW, i, 0, {
-      line_hl_group = "DiffDelete",
-      virt_text     = { { "-", "DiffDelete" } },
-      virt_text_pos = "inline",
-    })
+  -- Per-line extmarks for original (deleted) lines — skip for empty/whitespace selections
+  local orig_lines = vim.api.nvim_buf_get_lines(bufnr, start_line - 1, end_line, false)
+  local has_content = false
+  for _, line in ipairs(orig_lines) do
+    if line:match("%S") then has_content = true; break end
+  end
+
+  if has_content then
+    for i = start_line - 1, end_line - 1 do
+      vim.api.nvim_buf_set_extmark(bufnr, NS_PREVIEW, i, 0, {
+        line_hl_group = "DiffDelete",
+        virt_text     = { { "-", "DiffDelete" } },
+        virt_text_pos = "inline",
+      })
+    end
   end
 
   -- Resolve the text area width of the window showing this buffer so added

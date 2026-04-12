@@ -75,7 +75,7 @@ async function main() {
     process.exit(1)
   }
 
-  const systemPrompt = buildSystemPrompt({ filename: opts.filename, filetype: opts.filetype })
+  const systemPrompt = buildSystemPrompt({ filename: opts.filename, filetype: opts.filetype, selectionEmpty: !selection.trim() })
   const userMessage = buildUserMessage({
     selection,
     instruction: opts.instruction,
