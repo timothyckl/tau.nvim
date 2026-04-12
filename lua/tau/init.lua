@@ -222,8 +222,8 @@ function M._execute(bufnr, start_line, end_line, instruction)
     right_gravity = true,
   })
 
-  -- Start UI: cmdline + spinner
-  ui.start(bufnr, start_line, instruction)
+  -- Start UI: spinner
+  ui.start(bufnr, start_line)
 
   local accumulated = ""
 
