@@ -1,6 +1,7 @@
 import { buildSystemPrompt } from "./prompt"
 import { buildUserMessage } from "./context"
 import { streamDirect } from "./llm"
+import { estimatePrompt } from "./tokens"
 import { log } from "./log"
 
 function usage(): never {
@@ -82,6 +83,13 @@ async function main() {
     contextAbove: opts.contextAbove,
     contextBelow: opts.contextBelow,
   })
+
+  const rawWindow = process.env.TAU_CONTEXT_WINDOW
+  const contextWindowOverride =
+    rawWindow && /^\d+$/.test(rawWindow) ? parseInt(rawWindow, 10) : undefined
+  const estimate = estimatePrompt(systemPrompt, userMessage, model, contextWindowOverride)
+  process.stderr.write(`TAU_META:${JSON.stringify(estimate)}\n`)
+  log("token-estimate: " + JSON.stringify(estimate))
 
   log("stream-start")
   try {

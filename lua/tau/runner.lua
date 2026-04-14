@@ -11,6 +11,7 @@ local bin = plugin_dir .. "/cli/tau"
 ---   - context_below string
 ---   - filepath string
 ---   - filetype string
+---   - on_meta fun(meta: table)?  called with token estimation metadata
 ---   - on_token fun(chunk: string)
 ---   - on_done fun()
 ---   - on_error fun(msg: string)
@@ -25,6 +26,7 @@ function M.run(opts)
   if cfg.model then env.TAU_MODEL = cfg.model end
   if cfg.debug then env.TAU_DEBUG = "1" end
   if cfg.timeout_ms then env.TAU_TIMEOUT_MS = tostring(cfg.timeout_ms) end
+  if cfg.context_window then env.TAU_CONTEXT_WINDOW = tostring(cfg.context_window) end
 
   local cmd = { bin, opts.instruction }
 
@@ -41,6 +43,8 @@ function M.run(opts)
     vim.list_extend(cmd, { "--filetype", opts.filetype })
   end
 
+  local stderr_buf = ""
+
   local handle = vim.system(cmd, {
     env = env,
     stdin = opts.selection_text,
@@ -49,12 +53,35 @@ function M.run(opts)
         opts.on_token(chunk)
       end
     end,
+    stderr = function(_, chunk)
+      if not chunk then return end
+      stderr_buf = stderr_buf .. chunk
+      -- Parse complete TAU_META lines eagerly so the UI can show fill % during streaming
+      for line in stderr_buf:gmatch("[^\n]+") do
+        local json_str = line:match("^TAU_META:(.+)$")
+        if json_str and opts.on_meta then
+          local ok, meta = pcall(vim.json.decode, json_str)
+          if ok then
+            vim.schedule(function() opts.on_meta(meta) end)
+          end
+        end
+      end
+    end,
   }, function(obj)
     vim.schedule(function()
+      -- Strip TAU_META lines from stderr so they don't appear in error messages
+      local remaining = {}
+      for line in stderr_buf:gmatch("[^\n]+") do
+        if not line:match("^TAU_META:") then
+          table.insert(remaining, line)
+        end
+      end
+
       if obj.code == 0 then
         opts.on_done()
       else
-        local msg = (obj.stderr and obj.stderr ~= "") and obj.stderr or ("exit code " .. obj.code)
+        local err_msg = table.concat(remaining, "\n")
+        local msg = err_msg ~= "" and err_msg or ("exit code " .. obj.code)
         opts.on_error(msg)
       end
     end)
