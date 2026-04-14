@@ -56,8 +56,8 @@ function M.run(opts)
     stderr = function(_, chunk)
       if not chunk then return end
       stderr_buf = stderr_buf .. chunk
-      -- Parse complete TAU_META lines eagerly so the UI can show fill % during streaming
-      for line in stderr_buf:gmatch("[^\n]+") do
+      -- Parse and consume complete TAU_META lines eagerly so the UI can show fill % during streaming
+      stderr_buf = stderr_buf:gsub("([^\n]*)\n", function(line)
         local json_str = line:match("^TAU_META:(.+)$")
         if json_str and opts.on_meta then
           local ok, meta = pcall(vim.json.decode, json_str)
@@ -65,7 +65,8 @@ function M.run(opts)
             vim.schedule(function() opts.on_meta(meta) end)
           end
         end
-      end
+        return ""
+      end)
     end,
   }, function(obj)
     vim.schedule(function()
