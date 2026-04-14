@@ -1,6 +1,6 @@
 -- Native instruction picker — compact single-box layout.
 -- NOTE: When the Telescope UI provider (#45) is implemented, it must replicate
--- this layout spec: title top-left, input with padding, inline history cycling,
+-- this layout spec: title top-left, single-line input, inline history cycling,
 -- and keybinding hints in the bottom-right border.
 
 local M = {}
@@ -21,7 +21,7 @@ function M.open(history, on_choice, opts)
 
   -- Geometry
   local width     = math.max(40, math.min(70, vim.o.columns - 6))
-  local height    = 3
+  local height    = 1
   local start_row = math.floor((vim.o.lines - height - 2) / 2)
   local start_col = math.floor((vim.o.columns - width - 2) / 2)
 
@@ -29,7 +29,6 @@ function M.open(history, on_choice, opts)
   local buf = vim.api.nvim_create_buf(false, true)
   vim.bo[buf].bufhidden = "wipe"
   vim.bo[buf].buftype   = "nofile"
-  vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "", "", "" })
 
   -- Window
   local display_key = context_key:gsub("<[Ll]eader>", vim.g.mapleader or "\\")
@@ -49,20 +48,18 @@ function M.open(history, on_choice, opts)
     noautocmd = true,
   })
 
-  vim.api.nvim_win_set_cursor(win, { 2, 0 })
-
   -- History cycling state
   local hist_index  = 0
   local saved_input = ""
 
   local function get_input()
-    return vim.api.nvim_buf_get_lines(buf, 1, 2, false)[1] or ""
+    return vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1] or ""
   end
 
   local function set_input(text)
     cycling = true
-    vim.api.nvim_buf_set_lines(buf, 1, 2, false, { text })
-    vim.api.nvim_win_set_cursor(win, { 2, #text })
+    vim.api.nvim_buf_set_lines(buf, 0, 1, false, { text })
+    vim.api.nvim_win_set_cursor(win, { 1, #text })
     cycling = false
   end
 
@@ -133,18 +130,17 @@ function M.open(history, on_choice, opts)
   -- Autocmds
   local aug = vim.api.nvim_create_augroup(aug_name, { clear = true })
 
-  -- Enforce padding lines and reset history index on manual edits
+  -- Collapse to single line if user inserts a newline, and reset history index on manual edits
   vim.api.nvim_create_autocmd({ "TextChangedI", "TextChanged" }, {
     buffer   = buf,
     group    = aug,
     callback = function()
       local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
-      local needs_fix = #lines ~= 3 or lines[1] ~= "" or lines[3] ~= ""
-      if needs_fix then
-        local input = lines[2] or ""
+      if #lines > 1 then
+        local input = table.concat(lines, "")
         cycling = true
-        vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "", input, "" })
-        vim.api.nvim_win_set_cursor(win, { 2, #input })
+        vim.api.nvim_buf_set_lines(buf, 0, -1, false, { input })
+        vim.api.nvim_win_set_cursor(win, { 1, #input })
         cycling = false
       end
       if not cycling then
