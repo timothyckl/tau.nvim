@@ -50,7 +50,7 @@ function M.start(bufnr, start_line)
         table.insert(segments, { " · " .. _char_count .. " chars", "Comment" })
       end
       table.insert(segments, { " · " .. elapsed .. "s", "Comment" })
-      if _meta then
+      if _meta and _meta.fill_pct then
         local pct_str = string.format(" · %.0f%% ctx", _meta.fill_pct)
         local pct_hl = _meta.fill_pct > 90 and "WarningMsg" or "Comment"
         table.insert(segments, { pct_str, pct_hl })
@@ -129,7 +129,7 @@ function M.show_preview(bufnr, start_line, end_line, new_lines, instruction, met
 
   -- Compute width dynamically: "──<title>──" needs #title + 4;
   -- each content line needs #("+line"). Uses byte length (correct for ASCII).
-  local ctx_suffix = meta and string.format(" (%.0f%% ctx)", meta.fill_pct) or ""
+  local ctx_suffix = (meta and meta.fill_pct) and string.format(" (%.0f%% ctx)", meta.fill_pct) or ""
   local title = " tau: " .. instruction .. ctx_suffix .. " "
   local w = #title + 4
   for _, line in ipairs(new_lines) do

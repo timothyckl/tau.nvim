@@ -85,9 +85,9 @@ async function main() {
   })
 
   const rawWindow = process.env.TAU_CONTEXT_WINDOW
-  const contextWindowOverride =
-    rawWindow && /^\d+$/.test(rawWindow) ? parseInt(rawWindow, 10) : undefined
-  const estimate = estimatePrompt(systemPrompt, userMessage, model, contextWindowOverride)
+  const parsedWindow = rawWindow ? parseInt(rawWindow, 10) : NaN
+  const contextWindow = parsedWindow > 0 ? parsedWindow : undefined
+  const estimate = estimatePrompt(systemPrompt, userMessage, contextWindow)
   process.stderr.write(`TAU_META:${JSON.stringify(estimate)}\n`)
   log("token-estimate: " + JSON.stringify(estimate))
 
