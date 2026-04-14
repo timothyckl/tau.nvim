@@ -105,7 +105,7 @@ local function _regen()
 end
 
 --- Configure the plugin. Must be called before using :Tau.
---- @param opts table { api_url: string, api_key: string, model?: string, debug?: boolean, timeout_ms?: number }
+--- @param opts table { api_url: string, api_key: string, model?: string, debug?: boolean, timeout_ms?: number, context_window?: number, keys?: { context?: string } }
 function M.setup(opts)
   vim.validate({
     api_url    = { opts.api_url, "string" },
@@ -114,7 +114,9 @@ function M.setup(opts)
     debug      = { opts.debug, "boolean", true },
     timeout_ms      = { opts.timeout_ms, "number", true },
     context_window  = { opts.context_window, "number", true },
+    keys            = { opts.keys, "table", true },
   })
+  opts.keys = vim.tbl_extend("keep", opts.keys or {}, { context = "<leader>tc" })
   config = opts
 end
 
@@ -152,11 +154,11 @@ function M.run(opts)
     M._execute(bufnr, start_line, end_line, instruction)
   else
     _picking = true
-    picker.open(hist, "Instruction:", function(choice)
+    picker.open(hist, function(choice)
       _picking = false
       if not choice then return end
       M._execute(bufnr, start_line, end_line, choice)
-    end)
+    end, { context_key = config.keys.context })
   end
 end
 
