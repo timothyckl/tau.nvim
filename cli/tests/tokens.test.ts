@@ -11,10 +11,6 @@ describe("estimateTokens", () => {
     expect(estimateTokens("")).toBe(0)
   })
 
-  test("returns 0 for undefined-like input", () => {
-    expect(estimateTokens("")).toBe(0)
-  })
-
   test("estimates short text", () => {
     // "hello world" = 11 chars → ceil(11/4) = 3
     expect(estimateTokens("hello world")).toBe(3)

@@ -21,6 +21,7 @@ function M.start(bufnr, start_line)
   vim.api.nvim_buf_clear_namespace(bufnr, NS, 0, -1)
   vim.api.nvim_buf_clear_namespace(bufnr, NS_ERROR, 0, -1)
   _char_count = 0
+  _meta = nil
   _start_time = vim.uv.now()
   _bufnr = bufnr
 
