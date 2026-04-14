@@ -25,6 +25,7 @@ function M.run(opts)
   if cfg.model then env.TAU_MODEL = cfg.model end
   if cfg.debug then env.TAU_DEBUG = "1" end
   if cfg.timeout_ms then env.TAU_TIMEOUT_MS = tostring(cfg.timeout_ms) end
+  if cfg.context_window then env.TAU_CONTEXT_WINDOW = tostring(cfg.context_window) end
 
   local cmd = { bin, opts.instruction }
 
@@ -51,10 +52,25 @@ function M.run(opts)
     end,
   }, function(obj)
     vim.schedule(function()
+      -- Parse TAU_META lines from stderr and forward to on_meta callback.
+      -- Remaining stderr lines are preserved for error reporting.
+      local stderr = obj.stderr or ""
+      local remaining = {}
+      for line in stderr:gmatch("[^\n]+") do
+        local json_str = line:match("^TAU_META:(.+)$")
+        if json_str and opts.on_meta then
+          local ok, meta = pcall(vim.json.decode, json_str)
+          if ok then opts.on_meta(meta) end
+        else
+          table.insert(remaining, line)
+        end
+      end
+
       if obj.code == 0 then
         opts.on_done()
       else
-        local msg = (obj.stderr and obj.stderr ~= "") and obj.stderr or ("exit code " .. obj.code)
+        local err_msg = table.concat(remaining, "\n")
+        local msg = err_msg ~= "" and err_msg or ("exit code " .. obj.code)
         opts.on_error(msg)
       end
     end)

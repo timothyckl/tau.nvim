@@ -11,6 +11,7 @@ local _timer      = nil
 local _bufnr      = nil
 local _char_count = 0
 local _start_time = 0
+local _meta       = nil
 
 --- Start spinner above start_line.
 --- @param bufnr integer
@@ -43,14 +44,21 @@ function M.start(bufnr, start_line)
       end
       frame = (frame % #SPINNER_FRAMES) + 1
       local elapsed = math.floor((vim.uv.now() - _start_time) / 1000)
-      local label = _char_count > 0
-        and (SPINNER_FRAMES[frame] .. " tau · " .. _char_count .. " chars · " .. elapsed .. "s")
-        or  (SPINNER_FRAMES[frame] .. " tau · " .. elapsed .. "s")
+      local segments = { { SPINNER_FRAMES[frame] .. " tau", "Comment" } }
+      if _char_count > 0 then
+        table.insert(segments, { " · " .. _char_count .. " chars", "Comment" })
+      end
+      table.insert(segments, { " · " .. elapsed .. "s", "Comment" })
+      if _meta then
+        local pct_str = string.format(" · %.0f%% ctx", _meta.fill_pct)
+        local pct_hl = _meta.fill_pct > 90 and "WarningMsg" or "Comment"
+        table.insert(segments, { pct_str, pct_hl })
+      end
       local pos = vim.api.nvim_buf_get_extmark_by_id(bufnr, NS, mark_id, {})
       local row = (pos and #pos > 0) and pos[1] or (start_line - 1)
       vim.api.nvim_buf_set_extmark(bufnr, NS, row, 0, {
         id = mark_id,
-        virt_lines = { { { label, "Comment" } } },
+        virt_lines = { segments },
         virt_lines_above = true,
       })
     end)
@@ -63,6 +71,12 @@ function M.update_progress(char_count)
   _char_count = char_count
 end
 
+--- Store token estimation metadata for display in the spinner.
+--- @param meta table { estimated_tokens: number, context_window: number, fill_pct: number, warning?: string }
+function M.update_meta(meta)
+  _meta = meta
+end
+
 --- Stop and clear all UI state.
 function M.stop()
   if _timer then
@@ -72,6 +86,7 @@ function M.stop()
   end
   _char_count = 0
   _start_time = 0
+  _meta = nil
   if _bufnr and vim.api.nvim_buf_is_valid(_bufnr) then
     vim.api.nvim_buf_clear_namespace(_bufnr, NS, 0, -1)
   end
