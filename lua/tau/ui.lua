@@ -101,7 +101,8 @@ end
 --- @param end_line integer 1-indexed
 --- @param new_lines string[]
 --- @param instruction string
-function M.show_preview(bufnr, start_line, end_line, new_lines, instruction)
+--- @param meta? table  token estimation metadata from CLI
+function M.show_preview(bufnr, start_line, end_line, new_lines, instruction, meta)
   -- Per-line extmarks for original (deleted) lines — skip for empty/whitespace selections
   local orig_lines = vim.api.nvim_buf_get_lines(bufnr, start_line - 1, end_line, false)
   local has_content = false
@@ -128,7 +129,8 @@ function M.show_preview(bufnr, start_line, end_line, new_lines, instruction)
 
   -- Compute width dynamically: "──<title>──" needs #title + 4;
   -- each content line needs #("+line"). Uses byte length (correct for ASCII).
-  local title = " tau: " .. instruction .. " "
+  local ctx_suffix = meta and string.format(" (%.0f%% ctx)", meta.fill_pct) or ""
+  local title = " tau: " .. instruction .. ctx_suffix .. " "
   local w = #title + 4
   for _, line in ipairs(new_lines) do
     w = math.max(w, #line + 1)  -- "+line"

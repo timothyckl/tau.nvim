@@ -226,6 +226,7 @@ function M._execute(bufnr, start_line, end_line, instruction)
   ui.start(bufnr, start_line)
 
   local accumulated = ""
+  local token_meta = nil
 
   -- Pre-assign _job so callbacks always see a non-nil sentinel even if the
   -- process exits before vim.system returns on this tick. handle is filled in
@@ -244,6 +245,7 @@ function M._execute(bufnr, start_line, end_line, instruction)
     filetype = ctx.filetype,
 
     on_meta = function(meta)
+      token_meta = meta
       ui.update_meta(meta)
       if meta.warning then
         vim.api.nvim_echo({ { "tau: " .. meta.warning, "WarningMsg" } }, false, {})
@@ -311,7 +313,7 @@ function M._execute(bufnr, start_line, end_line, instruction)
           end,
         })
 
-        ui.show_preview(bufnr, final_start, final_end, new_lines, instruction)
+        ui.show_preview(bufnr, final_start, final_end, new_lines, instruction, token_meta)
 
         -- <Esc> now rejects instead of cancels; <CR> accepts
         vim.keymap.set("n", "<Esc>", _reject,
