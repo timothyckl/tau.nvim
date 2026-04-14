@@ -18,6 +18,9 @@ local _job = nil
 --- @type { bufnr: integer, start_line: integer, end_line: integer, new_lines: string[], instruction: string } | nil
 local _pending = nil
 
+--- True while a buf-attach listener is watching for in-region edits during pending review.
+local _watching = false
+
 --- True while the instruction picker is open, to prevent stacked invocations.
 local _picking = false
 
@@ -62,6 +65,7 @@ local function _cleanup(bufnr)
   if vim.api.nvim_buf_is_valid(bufnr) then
     vim.api.nvim_buf_clear_namespace(bufnr, NS_TRACK, 0, -1)
   end
+  _watching = false
   _job = nil
 end
 
@@ -72,6 +76,8 @@ local function _accept()
   local cur_start, cur_end = get_tracked_range(p.bufnr)
   local final_start = cur_start or p.start_line
   local final_end   = cur_end   or p.end_line
+  -- _cleanup must precede nvim_buf_set_lines: it sets _watching = false so the
+  -- buf-attach watcher ignores the programmatic write and does not emit a false cancel.
   _cleanup(p.bufnr)
   if not vim.api.nvim_buf_is_valid(p.bufnr) then
     vim.api.nvim_echo({ { "tau: buffer was closed, replacement lost", "ErrorMsg" } }, false, {})
@@ -268,6 +274,35 @@ function M._execute(bufnr, start_line, end_line, instruction)
         local final_end   = cur_end   or end_line
 
         _pending = { bufnr = bufnr, start_line = final_start, end_line = final_end, new_lines = new_lines, instruction = instruction }
+
+        -- Close over stable mark IDs so the callback has no dependency on _job,
+        -- which may be nil if _cleanup races with a scheduled on_lines delivery.
+        local watch_mark_start = _job.mark_start
+        local watch_mark_end   = _job.mark_end
+        _watching = vim.api.nvim_buf_attach(bufnr, false, {
+          on_lines = function(_, _, _, firstline, lastline)
+            if not _watching then return true end  -- detach
+            local s = vim.api.nvim_buf_get_extmark_by_id(bufnr, NS_TRACK, watch_mark_start, {})
+            local e = vim.api.nvim_buf_get_extmark_by_id(bufnr, NS_TRACK, watch_mark_end,   {})
+            if not s or #s == 0 or not e or #e == 0 then return true end
+            -- extmark rows are 0-indexed; convert to half-open [sel_start, sel_end) to match on_lines ranges
+            local sel_start = s[1]
+            local sel_end   = e[1] + 1  -- mark_end sits on last selected row; +1 makes upper bound exclusive
+            -- [firstline, lastline) ∩ [sel_start, sel_end) ≠ ∅  ↔  firstline < sel_end and lastline > sel_start
+            if firstline < sel_end and lastline > sel_start then
+              vim.schedule(function()
+                if not _pending then return end
+                _cleanup(bufnr)
+                vim.api.nvim_echo(
+                  { { "tau: selection modified — review cancelled", "WarningMsg" } },
+                  false, {}
+                )
+              end)
+              return true  -- detach
+            end
+          end,
+        })
+
         ui.show_preview(bufnr, final_start, final_end, new_lines, instruction)
 
         -- <Esc> now rejects instead of cancels; <CR> accepts
