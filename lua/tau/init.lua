@@ -120,6 +120,11 @@ function M.setup(opts)
     top_p           = { opts.top_p, "number", true },
     keys            = { opts.keys, "table", true },
   })
+  if opts.context_lines ~= nil then
+    if opts.context_lines < 1 or opts.context_lines ~= math.floor(opts.context_lines) then
+      error("tau: context_lines must be a positive integer, got " .. opts.context_lines)
+    end
+  end
   if opts.temperature ~= nil and (opts.temperature < 0 or opts.temperature > 2) then
     error("tau: temperature must be between 0 and 2, got " .. opts.temperature)
   end
@@ -128,14 +133,10 @@ function M.setup(opts)
       error("tau: max_tokens must be a positive integer, got " .. opts.max_tokens)
     end
   end
-  if opts.context_lines ~= nil then
-    if opts.context_lines < 1 or opts.context_lines ~= math.floor(opts.context_lines) then
-      error("tau: context_lines must be a positive integer, got " .. opts.context_lines)
-    end
-  end
   if opts.top_p ~= nil and (opts.top_p < 0 or opts.top_p > 1) then
     error("tau: top_p must be between 0 and 1, got " .. opts.top_p)
   end
+  opts.context_lines = opts.context_lines or 30
   opts.keys = vim.tbl_extend("keep", opts.keys or {}, { context = "<leader>tc" })
   config = opts
 end
