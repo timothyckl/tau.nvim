@@ -27,6 +27,9 @@ function M.run(opts)
   if cfg.debug then env.TAU_DEBUG = "1" end
   if cfg.timeout_ms then env.TAU_TIMEOUT_MS = tostring(cfg.timeout_ms) end
   if cfg.context_window then env.TAU_CONTEXT_WINDOW = tostring(cfg.context_window) end
+  if cfg.temperature then env.TAU_TEMPERATURE = tostring(cfg.temperature) end
+  if cfg.max_tokens then env.TAU_MAX_TOKENS = tostring(cfg.max_tokens) end
+  if cfg.top_p then env.TAU_TOP_P = tostring(cfg.top_p) end
 
   local cmd = { bin, opts.instruction }
 

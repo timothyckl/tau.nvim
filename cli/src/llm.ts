@@ -9,6 +9,9 @@ export interface LLMConfig {
   apiUrl: string
   apiKey: string
   model: string
+  temperature?: number
+  maxTokens?: number
+  topP?: number
 }
 
 const TIMEOUT_MS = Number(process.env.TAU_TIMEOUT_MS) || 60_000
@@ -33,6 +36,9 @@ async function fetchSSE(
         model: config.model,
         messages,
         stream: true,
+        ...(config.temperature !== undefined && { temperature: config.temperature }),
+        ...(config.maxTokens !== undefined && { max_tokens: config.maxTokens }),
+        ...(config.topP !== undefined && { top_p: config.topP }),
       }),
     })
   } catch (err) {

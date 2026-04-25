@@ -105,7 +105,7 @@ local function _regen()
 end
 
 --- Configure the plugin. Must be called before using :Tau.
---- @param opts table { api_url: string, api_key: string, model?: string, debug?: boolean, timeout_ms?: number, context_window?: number, keys?: { context?: string } }
+--- @param opts table { api_url: string, api_key: string, model?: string, debug?: boolean, timeout_ms?: number, context_window?: number, temperature?: number, max_tokens?: number, top_p?: number, keys?: { context?: string } }
 function M.setup(opts)
   vim.validate({
     api_url    = { opts.api_url, "string" },
@@ -114,8 +114,22 @@ function M.setup(opts)
     debug      = { opts.debug, "boolean", true },
     timeout_ms      = { opts.timeout_ms, "number", true },
     context_window  = { opts.context_window, "number", true },
+    temperature     = { opts.temperature, "number", true },
+    max_tokens      = { opts.max_tokens, "number", true },
+    top_p           = { opts.top_p, "number", true },
     keys            = { opts.keys, "table", true },
   })
+  if opts.temperature ~= nil and (opts.temperature < 0 or opts.temperature > 2) then
+    error("tau: temperature must be between 0 and 2, got " .. opts.temperature)
+  end
+  if opts.max_tokens ~= nil then
+    if opts.max_tokens < 1 or opts.max_tokens ~= math.floor(opts.max_tokens) then
+      error("tau: max_tokens must be a positive integer, got " .. opts.max_tokens)
+    end
+  end
+  if opts.top_p ~= nil and (opts.top_p < 0 or opts.top_p > 1) then
+    error("tau: top_p must be between 0 and 1, got " .. opts.top_p)
+  end
   opts.keys = vim.tbl_extend("keep", opts.keys or {}, { context = "<leader>tc" })
   config = opts
 end
