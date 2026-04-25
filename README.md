@@ -43,6 +43,7 @@ Using [lazy.nvim](https://github.com/folke/lazy.nvim):
 | `model` | string | no | Model name (default: `gpt-4o`) |
 | `debug` | boolean | no | Enable diagnostic logging to `~/.local/state/tau/diag.log` |
 | `timeout_ms` | number | no | Request timeout in milliseconds (default: `60000`) |
+| `context_lines` | number | no | Number of lines above/below selection sent as context (default: `30`) |
 
 ## Usage
 
