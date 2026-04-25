@@ -119,6 +119,10 @@ function M.open(history, on_choice, opts)
   vim.keymap.set("n", "j",     hist_next, mo)
 
   local function open_context()
+    if vim.fn.exists(":TauContext") == 0 then
+      vim.api.nvim_echo({ { "tau: context management not yet implemented", "WarningMsg" } }, false, {})
+      return
+    end
     context_open = true
     vim.cmd("TauContext")
     context_open = false
