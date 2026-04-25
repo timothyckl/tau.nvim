@@ -17,6 +17,7 @@ function M.open(history, on_choice, opts)
   local tel_opts = (ui_config.telescope and ui_config.telescope.instruction_picker) or {}
 
   local theme_name = tel_opts.theme
+  -- shallow copy then remove theme key (vim.tbl_extend does not remove keys via nil)
   local stripped = vim.tbl_extend("force", tel_opts, {})
   stripped.theme = nil
 
@@ -34,22 +35,27 @@ function M.open(history, on_choice, opts)
   local theme_fn = theme_name and require("telescope.themes")["get_" .. theme_name]
   local picker_opts = theme_fn and theme_fn(base_opts) or base_opts
 
-  -- History cycling state
+  -- History cycling state ��� cycling_gen guards against async TextChanged resets
   local hist_index = 0
   local saved_input = ""
-  local cycling = false
+  local cycling_gen = 0
+  local closed = false
 
   pickers.new(picker_opts, {
     prompt_title = "Instruction",
     finder = finders.new_table({ results = {} }),
     sorter = sorters.empty(),
     attach_mappings = function(prompt_bufnr, map)
-      local picker = action_state.get_current_picker(prompt_bufnr)
 
       local function set_prompt(text)
-        cycling = true
+        local picker = action_state.get_current_picker(prompt_bufnr)
+        if not picker then return end
+        local gen = cycling_gen + 1
+        cycling_gen = gen
         picker:set_prompt(text)
-        cycling = false
+        vim.schedule(function()
+          if cycling_gen == gen then cycling_gen = 0 end
+        end)
       end
 
       local function hist_prev()
@@ -73,12 +79,16 @@ function M.open(history, on_choice, opts)
 
       local function confirm()
         local text = action_state.get_current_line()
-        if not text or text == "" then return end
+        text = text and vim.trim(text) or ""
+        if text == "" then return end
+        closed = true
         actions.close(prompt_bufnr)
         vim.schedule(function() on_choice(text) end)
       end
 
       local function cancel()
+        if closed then return end
+        closed = true
         actions.close(prompt_bufnr)
         vim.schedule(function() on_choice(nil) end)
       end
@@ -91,13 +101,26 @@ function M.open(history, on_choice, opts)
         vim.cmd("TauContext")
       end
 
+      local aug = vim.api.nvim_create_augroup("tau_telescope_picker_" .. prompt_bufnr, { clear = true })
+
       -- Reset history index on manual edits
       vim.api.nvim_create_autocmd({ "TextChangedI", "TextChanged" }, {
         buffer = prompt_bufnr,
+        group  = aug,
         callback = function()
-          if not cycling then
+          if cycling_gen == 0 then
             hist_index = 0
           end
+        end,
+      })
+
+      -- Cancel if buffer is closed without confirm (e.g. :q, <C-w>q)
+      vim.api.nvim_create_autocmd({ "BufWipeout", "BufUnload" }, {
+        buffer   = prompt_bufnr,
+        group    = aug,
+        once     = true,
+        callback = function()
+          vim.schedule(function() cancel() end)
         end,
       })
 
@@ -114,8 +137,7 @@ function M.open(history, on_choice, opts)
       map("n", "k", hist_prev)
       map("n", "j", hist_next)
 
-      -- Context key
-      map("i", context_key, open_context)
+      -- Context key (normal mode only — leader sequences are unreliable in Telescope insert mode)
       map("n", context_key, open_context)
 
       return true
