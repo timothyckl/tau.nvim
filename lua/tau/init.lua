@@ -105,7 +105,7 @@ local function _regen()
 end
 
 --- Configure the plugin. Must be called before using :Tau.
---- @param opts table { api_url: string, api_key: string, model?: string, debug?: boolean, timeout_ms?: number, context_window?: number, keys?: { context?: string } }
+--- @param opts table { api_url: string, api_key: string, model?: string, debug?: boolean, timeout_ms?: number, context_window?: number, temperature?: number, max_tokens?: number, top_p?: number, keys?: { context?: string } }
 function M.setup(opts)
   vim.validate({
     api_url    = { opts.api_url, "string" },
@@ -114,6 +114,9 @@ function M.setup(opts)
     debug      = { opts.debug, "boolean", true },
     timeout_ms      = { opts.timeout_ms, "number", true },
     context_window  = { opts.context_window, "number", true },
+    temperature     = { opts.temperature, "number", true },
+    max_tokens      = { opts.max_tokens, "number", true },
+    top_p           = { opts.top_p, "number", true },
     keys            = { opts.keys, "table", true },
   })
   opts.keys = vim.tbl_extend("keep", opts.keys or {}, { context = "<leader>tc" })

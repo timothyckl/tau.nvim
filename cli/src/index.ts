@@ -66,6 +66,9 @@ async function main() {
   const apiUrl = process.env.TAU_API_URL
   const apiKey = process.env.TAU_API_KEY
   const model = process.env.TAU_MODEL ?? "gpt-4o"
+  const temperature = process.env.TAU_TEMPERATURE ? parseFloat(process.env.TAU_TEMPERATURE) : undefined
+  const maxTokens = process.env.TAU_MAX_TOKENS ? parseInt(process.env.TAU_MAX_TOKENS, 10) : undefined
+  const topP = process.env.TAU_TOP_P ? parseFloat(process.env.TAU_TOP_P) : undefined
 
   if (!apiUrl) {
     process.stderr.write("tau: TAU_API_URL is not set\n")
@@ -98,7 +101,7 @@ async function main() {
         { role: "system", content: systemPrompt },
         { role: "user", content: userMessage },
       ],
-      { apiUrl, apiKey, model },
+      { apiUrl, apiKey, model, temperature, maxTokens, topP },
       (token) => process.stdout.write(token)
     )
     log("stream-done")
