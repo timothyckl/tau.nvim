@@ -151,7 +151,7 @@ function M.setup(opts)
     telescope = { instruction_picker = {} },
   })
   config = opts
-  ui.reset()
+  ui.reset(opts.ui)
 end
 
 --- Main entry point. Called from the :Tau command.

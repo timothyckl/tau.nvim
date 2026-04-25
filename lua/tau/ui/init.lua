@@ -1,14 +1,14 @@
 local M = {}
 
 local _provider = nil
+local _ui_config = nil
 
 --- Resolve the picker provider, cache the result.
---- @param ui_config table
 --- @return table provider module with .open(history, on_choice, opts)
-local function resolve(ui_config)
+local function resolve()
   if _provider then return _provider end
 
-  local requested = ui_config.provider or "native"
+  local requested = (_ui_config and _ui_config.provider) or "native"
 
   if requested == "telescope" then
     local has_telescope = pcall(require, "telescope")
@@ -25,9 +25,11 @@ local function resolve(ui_config)
   return _provider
 end
 
---- Clear cached provider (called on re-setup).
-function M.reset()
+--- Store config and clear cached provider (called from setup).
+--- @param ui_config table
+function M.reset(ui_config)
   _provider = nil
+  _ui_config = ui_config
 end
 
 --- Pick an instruction string.
@@ -35,7 +37,7 @@ end
 --- @param on_choice fun(choice: string|nil)
 --- @param opts table { context_key: string, ui_config: table }
 function M.pick_instruction(history, on_choice, opts)
-  local provider = resolve(opts.ui_config)
+  local provider = resolve()
   provider.open(history, on_choice, opts)
 end
 
