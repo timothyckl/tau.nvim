@@ -1,8 +1,8 @@
 local context = require("tau.context")
 local runner = require("tau.runner")
-local ui = require("tau.ui")
+local display = require("tau.display")
 local history = require("tau.history")
-local picker = require("tau.picker")
+local ui = require("tau.ui")
 
 local M = {}
 
@@ -27,7 +27,7 @@ local _picking = false
 --- Clear preview UI unconditionally — safe to call even if _job is nil.
 local function _clear_pending()
   if not _pending then return end
-  ui.clear_preview(_pending.bufnr)
+  display.clear_preview(_pending.bufnr)
   pcall(vim.keymap.del, "n", "<CR>", { buffer = _pending.bufnr })
   pcall(vim.keymap.del, "n", "r",    { buffer = _pending.bufnr })
   _pending = nil
@@ -53,7 +53,7 @@ local function _cleanup(bufnr)
   -- if _job has already been set to nil (e.g. double-accept or cancel race).
   _clear_pending()
   if not _job then return end
-  ui.stop()
+  display.stop()
   pcall(vim.keymap.del, "n", "<Esc>", { buffer = bufnr })
   if _job.prev_esc and _job.prev_esc.lhs and _job.prev_esc.lhs ~= "" then
     if vim.api.nvim_buf_is_valid(bufnr) then
@@ -119,7 +119,15 @@ function M.setup(opts)
     max_tokens      = { opts.max_tokens, "number", true },
     top_p           = { opts.top_p, "number", true },
     keys            = { opts.keys, "table", true },
+    ui              = { opts.ui, "table", true },
   })
+  if opts.ui then
+    if opts.ui.provider ~= nil
+      and opts.ui.provider ~= "native"
+      and opts.ui.provider ~= "telescope" then
+      error('tau: ui.provider must be "native" or "telescope", got ' .. tostring(opts.ui.provider))
+    end
+  end
   if opts.context_lines ~= nil then
     if opts.context_lines < 1 or opts.context_lines ~= math.floor(opts.context_lines) then
       error("tau: context_lines must be a positive integer, got " .. opts.context_lines)
@@ -138,7 +146,12 @@ function M.setup(opts)
   end
   opts.context_lines = opts.context_lines or 30
   opts.keys = vim.tbl_extend("keep", opts.keys or {}, { context = "<leader>tc" })
+  opts.ui = vim.tbl_deep_extend("keep", opts.ui or {}, {
+    provider = "native",
+    telescope = { instruction_picker = {} },
+  })
   config = opts
+  ui.reset()
 end
 
 --- Main entry point. Called from the :Tau command.
@@ -175,11 +188,11 @@ function M.run(opts)
     M._execute(bufnr, start_line, end_line, instruction)
   else
     _picking = true
-    picker.open(hist, function(choice)
+    ui.pick_instruction(hist, function(choice)
       _picking = false
       if not choice then return end
       M._execute(bufnr, start_line, end_line, choice)
-    end, { context_key = config.keys.context })
+    end, { context_key = config.keys.context, ui_config = config.ui })
   end
 end
 
@@ -246,7 +259,7 @@ function M._execute(bufnr, start_line, end_line, instruction)
   })
 
   -- Start UI: spinner
-  ui.start(bufnr, start_line)
+  display.start(bufnr, start_line)
 
   local accumulated = ""
   local token_meta = nil
@@ -269,7 +282,7 @@ function M._execute(bufnr, start_line, end_line, instruction)
 
     on_meta = function(meta)
       token_meta = meta
-      ui.update_meta(meta)
+      display.update_meta(meta)
       if meta.warning then
         vim.api.nvim_echo({ { "tau: " .. meta.warning, "WarningMsg" } }, false, {})
       end
@@ -278,7 +291,7 @@ function M._execute(bufnr, start_line, end_line, instruction)
     on_token = function(chunk)
       accumulated = accumulated .. chunk
       vim.schedule(function()
-        ui.update_progress(#accumulated)
+        display.update_progress(#accumulated)
       end)
     end,
 
@@ -292,7 +305,7 @@ function M._execute(bufnr, start_line, end_line, instruction)
       history.add(instruction)
 
       -- Stop spinner; defer full cleanup until accept/reject
-      ui.stop()
+      display.stop()
 
       local ok, err = pcall(function()
         -- Strip markdown code fences the model may wrap output in
@@ -336,7 +349,7 @@ function M._execute(bufnr, start_line, end_line, instruction)
           end,
         })
 
-        ui.show_preview(bufnr, final_start, final_end, new_lines, instruction, token_meta)
+        display.show_preview(bufnr, final_start, final_end, new_lines, instruction, token_meta)
 
         -- <Esc> now rejects instead of cancels; <CR> accepts
         vim.keymap.set("n", "<Esc>", _reject,
@@ -360,7 +373,7 @@ function M._execute(bufnr, start_line, end_line, instruction)
       if was_cancelled then return end
 
       local ok, err = pcall(function()
-        ui.error(bufnr, start_line, msg)
+        display.error(bufnr, start_line, msg)
       end)
       if not ok then
         vim.api.nvim_echo({ { "tau: " .. tostring(err), "ErrorMsg" } }, false, {})
