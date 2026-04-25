@@ -23,7 +23,14 @@ function M.open(history, on_choice, opts)
 
   local base_opts = vim.tbl_deep_extend("force", {
     layout_strategy = "center",
-    layout_config = { width = 0.4, height = 1 },
+    layout_config = {
+      width = function(_, max_cols)
+        return math.max(40, math.min(70, max_cols - 6))
+      end,
+      height = 1,
+      preview_cutoff = 999,
+    },
+    prompt_prefix = "",
     results_title = false,
     sorting_strategy = "ascending",
     borderchars = {
