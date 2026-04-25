@@ -31,8 +31,7 @@ function M.open(history, on_choice, opts)
   vim.bo[buf].buftype   = "nofile"
 
   -- Window
-  local display_key = context_key:gsub("<[Ll]eader>", vim.g.mapleader or "\\")
-  local footer = " ⇅ reuse · " .. display_key .. " context "
+  local footer = " ⇅ reuse "
   local win = vim.api.nvim_open_win(buf, true, {
     relative  = "editor",
     row       = start_row,
