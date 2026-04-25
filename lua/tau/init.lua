@@ -119,6 +119,17 @@ function M.setup(opts)
     top_p           = { opts.top_p, "number", true },
     keys            = { opts.keys, "table", true },
   })
+  if opts.temperature ~= nil and (opts.temperature < 0 or opts.temperature > 2) then
+    error("tau: temperature must be between 0 and 2, got " .. opts.temperature)
+  end
+  if opts.max_tokens ~= nil then
+    if opts.max_tokens < 1 or opts.max_tokens ~= math.floor(opts.max_tokens) then
+      error("tau: max_tokens must be a positive integer, got " .. opts.max_tokens)
+    end
+  end
+  if opts.top_p ~= nil and (opts.top_p < 0 or opts.top_p > 1) then
+    error("tau: top_p must be between 0 and 1, got " .. opts.top_p)
+  end
   opts.keys = vim.tbl_extend("keep", opts.keys or {}, { context = "<leader>tc" })
   config = opts
 end

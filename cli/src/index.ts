@@ -58,6 +58,28 @@ async function readStdin(): Promise<string> {
   return Buffer.concat(chunks).toString("utf-8")
 }
 
+function parseEnvFloat(name: string): number | undefined {
+  const raw = process.env[name]
+  if (!raw) return undefined
+  const val = parseFloat(raw)
+  if (isNaN(val)) {
+    process.stderr.write(`tau: invalid value for ${name}: ${raw}\n`)
+    process.exit(1)
+  }
+  return val
+}
+
+function parseEnvInt(name: string): number | undefined {
+  const raw = process.env[name]
+  if (!raw) return undefined
+  const val = parseInt(raw, 10)
+  if (isNaN(val)) {
+    process.stderr.write(`tau: invalid value for ${name}: ${raw}\n`)
+    process.exit(1)
+  }
+  return val
+}
+
 async function main() {
   const opts = parseArgs(process.argv)
 
@@ -66,9 +88,9 @@ async function main() {
   const apiUrl = process.env.TAU_API_URL
   const apiKey = process.env.TAU_API_KEY
   const model = process.env.TAU_MODEL ?? "gpt-4o"
-  const temperature = process.env.TAU_TEMPERATURE ? parseFloat(process.env.TAU_TEMPERATURE) : undefined
-  const maxTokens = process.env.TAU_MAX_TOKENS ? parseInt(process.env.TAU_MAX_TOKENS, 10) : undefined
-  const topP = process.env.TAU_TOP_P ? parseFloat(process.env.TAU_TOP_P) : undefined
+  const temperature = parseEnvFloat("TAU_TEMPERATURE")
+  const maxTokens = parseEnvInt("TAU_MAX_TOKENS")
+  const topP = parseEnvFloat("TAU_TOP_P")
 
   if (!apiUrl) {
     process.stderr.write("tau: TAU_API_URL is not set\n")
