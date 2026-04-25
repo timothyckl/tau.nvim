@@ -105,7 +105,7 @@ local function _regen()
 end
 
 --- Configure the plugin. Must be called before using :Tau.
---- @param opts table { api_url: string, api_key: string, model?: string, debug?: boolean, timeout_ms?: number, context_window?: number, temperature?: number, max_tokens?: number, top_p?: number, keys?: { context?: string } }
+--- @param opts table { api_url: string, api_key: string, model?: string, debug?: boolean, timeout_ms?: number, context_window?: number, context_lines?: number, temperature?: number, max_tokens?: number, top_p?: number, keys?: { context?: string } }
 function M.setup(opts)
   vim.validate({
     api_url    = { opts.api_url, "string" },
@@ -114,11 +114,17 @@ function M.setup(opts)
     debug      = { opts.debug, "boolean", true },
     timeout_ms      = { opts.timeout_ms, "number", true },
     context_window  = { opts.context_window, "number", true },
+    context_lines   = { opts.context_lines, "number", true },
     temperature     = { opts.temperature, "number", true },
     max_tokens      = { opts.max_tokens, "number", true },
     top_p           = { opts.top_p, "number", true },
     keys            = { opts.keys, "table", true },
   })
+  if opts.context_lines ~= nil then
+    if opts.context_lines < 1 or opts.context_lines ~= math.floor(opts.context_lines) then
+      error("tau: context_lines must be a positive integer, got " .. opts.context_lines)
+    end
+  end
   if opts.temperature ~= nil and (opts.temperature < 0 or opts.temperature > 2) then
     error("tau: temperature must be between 0 and 2, got " .. opts.temperature)
   end
@@ -130,6 +136,7 @@ function M.setup(opts)
   if opts.top_p ~= nil and (opts.top_p < 0 or opts.top_p > 1) then
     error("tau: top_p must be between 0 and 1, got " .. opts.top_p)
   end
+  opts.context_lines = opts.context_lines or 30
   opts.keys = vim.tbl_extend("keep", opts.keys or {}, { context = "<leader>tc" })
   config = opts
 end
@@ -227,7 +234,7 @@ function M._execute(bufnr, start_line, end_line, instruction)
     return
   end
 
-  local ctx = context.get(bufnr, start_line, end_line)
+  local ctx = context.get(bufnr, start_line, end_line, config.context_lines)
   local indent = base_indent(ctx.selection.lines)
 
   -- Place tracking extmarks to follow selection boundaries as user edits outside the region
