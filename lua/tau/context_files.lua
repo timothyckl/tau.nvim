@@ -48,7 +48,7 @@ end
 --- @param path string
 --- @return boolean
 function M.contains(path)
-  return _files[normalize(path)] or false
+  return _files[normalize(path)] ~= nil
 end
 
 --- Clear all context files.

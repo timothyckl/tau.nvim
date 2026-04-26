@@ -11,6 +11,7 @@ local bin = plugin_dir .. "/cli/tau"
 ---   - context_below string
 ---   - filepath string
 ---   - filetype string
+---   - context_files string[]?  absolute paths of session-scoped context files
 ---   - on_meta fun(meta: table)?  called with token estimation metadata
 ---   - on_token fun(chunk: string)
 ---   - on_done fun()

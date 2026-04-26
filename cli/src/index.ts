@@ -40,7 +40,12 @@ function parseArgs(argv: string[]): {
     } else if (arg === "--filetype") {
       filetype = args[++i]
     } else if (arg === "--context-file") {
-      contextFiles.push(args[++i])
+      const val = args[++i]
+      if (val === undefined) {
+        process.stderr.write("tau: --context-file requires a path argument\n")
+        process.exit(1)
+      }
+      contextFiles.push(val)
     } else if (arg.startsWith("--")) {
       process.stderr.write(`tau: unknown flag ${arg}\n`)
       ++i // skip the next token (assumed value)

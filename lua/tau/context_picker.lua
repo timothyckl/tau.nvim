@@ -62,7 +62,7 @@ local function build_footer(width)
   local count = #context_files.get()
   local left = count > 0 and (" " .. count .. " selected ") or ""
   local right = " <CR> toggle · <Esc> close "
-  local pad = width - #left - #right
+  local pad = width - vim.fn.strdisplaywidth(left) - vim.fn.strdisplaywidth(right)
   if pad < 1 then pad = 1 end
   return left .. string.rep(" ", pad) .. right
 end
