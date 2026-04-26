@@ -93,6 +93,9 @@ function M.open(opts)
   vim.bo[buf].bufhidden = "wipe"
   vim.bo[buf].buftype = "nofile"
 
+  -- Cursor line highlight
+  vim.api.nvim_set_hl(0, "TauContextCursorLine", { link = "CursorLine" })
+
   -- Window
   local win = vim.api.nvim_open_win(buf, true, {
     relative  = "editor",
@@ -108,6 +111,8 @@ function M.open(opts)
     style     = "minimal",
     noautocmd = true,
   })
+  vim.wo[win].cursorline = true
+  vim.wo[win].winhighlight = "CursorLine:TauContextCursorLine"
 
   -- Render candidate lines
   local function render()
