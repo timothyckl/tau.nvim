@@ -45,6 +45,11 @@ function M.run(opts)
   if opts.filetype and opts.filetype ~= "" then
     vim.list_extend(cmd, { "--filetype", opts.filetype })
   end
+  if opts.context_files then
+    for _, path in ipairs(opts.context_files) do
+      vim.list_extend(cmd, { "--context-file", path })
+    end
+  end
 
   local stderr_buf = ""
 

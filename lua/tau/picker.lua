@@ -119,13 +119,16 @@ function M.open(history, on_choice, opts)
   vim.keymap.set("n", "j",     hist_next, mo)
 
   local function open_context()
-    if vim.fn.exists(":TauContext") == 0 then
-      vim.api.nvim_echo({ { "tau: context management not yet implemented", "WarningMsg" } }, false, {})
-      return
-    end
     context_open = true
-    vim.cmd("TauContext")
-    context_open = false
+    require("tau.context_picker").open({
+      on_close = function()
+        context_open = false
+        if not closed and vim.api.nvim_win_is_valid(win) then
+          vim.api.nvim_set_current_win(win)
+          vim.cmd("startinsert")
+        end
+      end,
+    })
   end
   vim.keymap.set("i", context_key, open_context, mo)
   vim.keymap.set("n", context_key, open_context, mo)

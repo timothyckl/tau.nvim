@@ -266,6 +266,7 @@ function M._execute(bufnr, start_line, end_line, instruction)
     context_below = ctx.below,
     filepath = ctx.filepath,
     filetype = ctx.filetype,
+    context_files = require("tau.context_files").get(),
 
     on_meta = function(meta)
       token_meta = meta
