@@ -6,7 +6,7 @@ import { log } from "./log"
 
 function usage(): never {
   process.stderr.write(
-    "Usage: tau <instruction> [--context-above <text>] [--context-below <text>] [--file <path>] [--filetype <lang>]\n"
+    "Usage: tau <instruction> [--context-above <text>] [--context-below <text>] [--file <path>] [--filetype <lang>] [--context-file <path>]...\n"
   )
   process.exit(1)
 }
@@ -17,6 +17,7 @@ function parseArgs(argv: string[]): {
   contextBelow?: string
   filename?: string
   filetype?: string
+  contextFiles: string[]
 } {
   const args = argv.slice(2)
   if (args.length === 0) usage()
@@ -26,6 +27,7 @@ function parseArgs(argv: string[]): {
   let contextBelow: string | undefined
   let filename: string | undefined
   let filetype: string | undefined
+  const contextFiles: string[] = []
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]
@@ -37,6 +39,13 @@ function parseArgs(argv: string[]): {
       filename = args[++i]
     } else if (arg === "--filetype") {
       filetype = args[++i]
+    } else if (arg === "--context-file") {
+      const val = args[++i]
+      if (val === undefined) {
+        process.stderr.write("tau: --context-file requires a path argument\n")
+        process.exit(1)
+      }
+      contextFiles.push(val)
     } else if (arg.startsWith("--")) {
       process.stderr.write(`tau: unknown flag ${arg}\n`)
       ++i // skip the next token (assumed value)
@@ -47,7 +56,7 @@ function parseArgs(argv: string[]): {
 
   if (!instruction) usage()
 
-  return { instruction, contextAbove, contextBelow, filename, filetype }
+  return { instruction, contextAbove, contextBelow, filename, filetype, contextFiles }
 }
 
 async function readStdin(): Promise<string> {
@@ -101,12 +110,14 @@ async function main() {
     process.exit(1)
   }
 
-  const systemPrompt = buildSystemPrompt({ filename: opts.filename, filetype: opts.filetype, selectionEmpty: !selection.trim() })
+  const hasContextFiles = opts.contextFiles.length > 0
+  const systemPrompt = buildSystemPrompt({ filename: opts.filename, filetype: opts.filetype, selectionEmpty: !selection.trim(), hasContextFiles })
   const userMessage = buildUserMessage({
     selection,
     instruction: opts.instruction,
     contextAbove: opts.contextAbove,
     contextBelow: opts.contextBelow,
+    contextFiles: opts.contextFiles,
   })
 
   const rawWindow = process.env.TAU_CONTEXT_WINDOW

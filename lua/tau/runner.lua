@@ -11,6 +11,7 @@ local bin = plugin_dir .. "/cli/tau"
 ---   - context_below string
 ---   - filepath string
 ---   - filetype string
+---   - context_files string[]?  absolute paths of session-scoped context files
 ---   - on_meta fun(meta: table)?  called with token estimation metadata
 ---   - on_token fun(chunk: string)
 ---   - on_done fun()
@@ -44,6 +45,11 @@ function M.run(opts)
   end
   if opts.filetype and opts.filetype ~= "" then
     vim.list_extend(cmd, { "--filetype", opts.filetype })
+  end
+  if opts.context_files then
+    for _, path in ipairs(opts.context_files) do
+      vim.list_extend(cmd, { "--context-file", path })
+    end
   end
 
   local stderr_buf = ""

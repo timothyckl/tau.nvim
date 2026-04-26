@@ -35,4 +35,14 @@ describe("buildSystemPrompt", () => {
     expect(result).toContain("empty")
     expect(result).not.toContain("replacement")
   })
+
+  test("includes context files rule when hasContextFiles is true", () => {
+    const result = buildSystemPrompt({ hasContextFiles: true })
+    expect(result).toContain("[Context files]")
+  })
+
+  test("omits context files rule when hasContextFiles is false", () => {
+    const result = buildSystemPrompt({ hasContextFiles: false })
+    expect(result).not.toContain("[Context files]")
+  })
 })

@@ -1,5 +1,8 @@
-import { describe, test, expect } from "bun:test"
+import { describe, test, expect, beforeAll, afterAll } from "bun:test"
 import { buildUserMessage } from "../src/context"
+import { writeFileSync, unlinkSync, mkdtempSync } from "node:fs"
+import { join } from "node:path"
+import { tmpdir } from "node:os"
 
 describe("buildUserMessage", () => {
   test("includes all sections when context provided", () => {
@@ -56,5 +59,73 @@ describe("buildUserMessage", () => {
     expect(aboveIdx).toBeLessThan(selIdx)
     expect(selIdx).toBeLessThan(belowIdx)
     expect(belowIdx).toBeLessThan(instIdx)
+  })
+
+  describe("context files", () => {
+    let tmpDir: string
+    let tmpFile: string
+
+    beforeAll(() => {
+      tmpDir = mkdtempSync(join(tmpdir(), "tau-test-"))
+      tmpFile = join(tmpDir, "helper.ts")
+      writeFileSync(tmpFile, "export function helper() { return 42 }")
+    })
+
+    afterAll(() => {
+      try { unlinkSync(tmpFile) } catch {}
+    })
+
+    test("includes context files section with valid file", () => {
+      const result = buildUserMessage({
+        selection: "SEL",
+        instruction: "INST",
+        contextFiles: [tmpFile],
+      })
+      expect(result).toContain("[Context files]")
+      expect(result).toContain(`--- ${tmpFile} ---`)
+      expect(result).toContain("export function helper() { return 42 }")
+    })
+
+    test("omits context files section when empty", () => {
+      const result = buildUserMessage({
+        selection: "SEL",
+        instruction: "INST",
+        contextFiles: [],
+      })
+      expect(result).not.toContain("[Context files]")
+    })
+
+    test("omits context files section when undefined", () => {
+      const result = buildUserMessage({
+        selection: "SEL",
+        instruction: "INST",
+      })
+      expect(result).not.toContain("[Context files]")
+    })
+
+    test("marks unreadable files", () => {
+      const result = buildUserMessage({
+        selection: "SEL",
+        instruction: "INST",
+        contextFiles: ["/nonexistent/path/file.ts"],
+      })
+      expect(result).toContain("[Context files]")
+      expect(result).toContain("(unreadable)")
+    })
+
+    test("context files appear before context above", () => {
+      const result = buildUserMessage({
+        selection: "SEL",
+        instruction: "INST",
+        contextAbove: "ABOVE",
+        contextBelow: "BELOW",
+        contextFiles: [tmpFile],
+      })
+      const filesIdx = result.indexOf("[Context files]")
+      const aboveIdx = result.indexOf("[Context above]")
+      const selIdx = result.indexOf("[Selected code]")
+      expect(filesIdx).toBeLessThan(aboveIdx)
+      expect(aboveIdx).toBeLessThan(selIdx)
+    })
   })
 })
