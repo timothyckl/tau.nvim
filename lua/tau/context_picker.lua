@@ -1,5 +1,5 @@
 -- Floating picker for selecting context files.
--- Shows open buffers + all project files; toggles persist in context_files module.
+-- Shows open buffers + all files in cwd; toggles persist in context_files module.
 
 local context_files = require("tau.context_files")
 
@@ -27,10 +27,9 @@ local function get_candidates()
     end
   end
 
-  -- All project files (tracked + untracked, respecting .gitignore)
-  local git_files = vim.fn.systemlist("git ls-files --cached --others --exclude-standard")
-  if vim.v.shell_error == 0 then
-    for _, rel in ipairs(git_files) do
+  -- All files in the working directory
+  for _, rel in ipairs(vim.fn.glob("**/*", false, true)) do
+    if vim.fn.isdirectory(rel) == 0 then
       local abs = vim.fn.fnamemodify(rel, ":p")
       if not seen[abs] then
         seen[abs] = true
@@ -55,14 +54,16 @@ local function format_line(abs_path)
   end
 end
 
---- Build the footer as a short string (Neovim fills remaining border with ─).
+--- Build the footer with selected count (left) and hints (right), padded with ─.
+--- @param width integer  inner window width
 --- @return string
-local function build_footer()
+local function build_footer(width)
   local count = #context_files.get()
-  if count > 0 then
-    return " " .. count .. " selected "
-  end
-  return ""
+  local left = count > 0 and (" " .. count .. " selected ") or ""
+  local right = " <CR> toggle · <Esc> close "
+  local pad = width - vim.fn.strdisplaywidth(left) - vim.fn.strdisplaywidth(right)
+  if pad < 1 then pad = 1 end
+  return left .. string.rep("─", pad) .. right
 end
 
 --- Open the context file picker.
@@ -102,7 +103,7 @@ function M.open(opts)
     border    = "rounded",
     title     = " Context Files ",
     title_pos = "left",
-    footer     = build_footer(),
+    footer     = build_footer(width),
     footer_pos = "left",
     style     = "minimal",
     noautocmd = true,
@@ -120,7 +121,7 @@ function M.open(opts)
 
     -- Update footer with current selected count
     if vim.api.nvim_win_is_valid(win) then
-      vim.api.nvim_win_set_config(win, { footer = build_footer(), footer_pos = "left" })
+      vim.api.nvim_win_set_config(win, { footer = build_footer(width), footer_pos = "left" })
     end
   end
 
