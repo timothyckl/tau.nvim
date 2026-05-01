@@ -69,7 +69,7 @@ local function build_footer(width, current_file)
     if p ~= current_file then count = count + 1 end
   end
   local left = count > 0 and (" " .. count .. " selected ") or ""
-  local right = " <CR> toggle · <Esc> close "
+  local right = " <Space> toggle · <Esc> close "
   local pad = width - vim.fn.strdisplaywidth(left) - vim.fn.strdisplaywidth(right)
   if pad < 1 then pad = 1 end
   return left .. string.rep("─", pad) .. right
@@ -179,7 +179,7 @@ function M.open(opts)
 
   -- Keymaps
   local mo = { buffer = buf, noremap = true, silent = true }
-  vim.keymap.set("n", "<CR>",  toggle, mo)
+  vim.keymap.set("n", "<Space>", toggle, mo)
   vim.keymap.set("n", "<Esc>", close,  mo)
   vim.keymap.set("n", "q",     close,  mo)
 
