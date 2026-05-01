@@ -150,6 +150,18 @@ function M.open(opts)
 
   render()
 
+  local footer_update_pending = false
+  local function schedule_footer_update()
+    if footer_update_pending then return end
+    footer_update_pending = true
+    vim.schedule(function()
+      footer_update_pending = false
+      if vim.api.nvim_win_is_valid(win) then
+        vim.api.nvim_win_set_config(win, { footer = build_footer(selected_count), footer_pos = "left" })
+      end
+    end)
+  end
+
   -- Close helpers
   local closed = false
 
@@ -184,12 +196,9 @@ function M.open(opts)
       vim.api.nvim_win_set_cursor(win, { row, 0 })
     end
 
-    -- Deferred so the line repaint is not blocked by the window re-layout
-    vim.schedule(function()
-      if vim.api.nvim_win_is_valid(win) then
-        vim.api.nvim_win_set_config(win, { footer = build_footer(selected_count), footer_pos = "left" })
-      end
-    end)
+    -- Deferred so the line repaint is not blocked by the window re-layout.
+    -- Coalesce bursts of toggles into one footer reconfiguration per event-loop tick.
+    schedule_footer_update()
   end
 
   -- Keymaps
