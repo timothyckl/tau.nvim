@@ -137,7 +137,7 @@ function M.setup(opts)
     error("tau: top_p must be between 0 and 1, got " .. opts.top_p)
   end
   opts.context_lines = opts.context_lines or 30
-  opts.keys = vim.tbl_extend("keep", opts.keys or {}, { context = "<leader>tc" })
+  opts.keys = vim.tbl_extend("keep", opts.keys or {}, { context = "<C-t>" })
   config = opts
 end
 
@@ -175,11 +175,13 @@ function M.run(opts)
     M._execute(bufnr, start_line, end_line, instruction)
   else
     _picking = true
+    local _raw_name = vim.api.nvim_buf_get_name(bufnr)
+    local current_file = _raw_name ~= "" and vim.fn.fnamemodify(_raw_name, ":p") or nil
     picker.open(hist, function(choice)
       _picking = false
       if not choice then return end
       M._execute(bufnr, start_line, end_line, choice)
-    end, { context_key = config.keys.context })
+    end, { context_key = config.keys.context, current_file = current_file })
   end
 end
 
@@ -266,6 +268,7 @@ function M._execute(bufnr, start_line, end_line, instruction)
     context_below = ctx.below,
     filepath = ctx.filepath,
     filetype = ctx.filetype,
+    context_files = require("tau.context_files").get(),
 
     on_meta = function(meta)
       token_meta = meta

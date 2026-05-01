@@ -2,6 +2,7 @@ export interface PromptOpts {
   filename?: string
   filetype?: string
   selectionEmpty?: boolean
+  hasContextFiles?: boolean
 }
 
 export function buildSystemPrompt(opts: PromptOpts): string {
@@ -23,12 +24,17 @@ export function buildSystemPrompt(opts: PromptOpts): string {
     ? "Output ONLY the code to insert — nothing before it, nothing after it"
     : "Output ONLY the replacement for [Selected code] — nothing before it, nothing after it"
 
+  const contextFilesRule = opts.hasContextFiles
+    ? "- Reference [Context files] for broader project context when relevant to the instruction"
+    : ""
+
   return [
     intro,
     outputRule,
     "CRITICAL RULES:",
     `- ${firstBullet}`,
     "- Do NOT repeat code from [Context above] or [Context below]",
+    contextFilesRule,
     "- No markdown fences (no ```)",
     "- No explanation or commentary",
     "- Preserve indentation and style",

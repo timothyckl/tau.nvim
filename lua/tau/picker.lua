@@ -3,15 +3,18 @@
 -- this layout spec: title top-left, single-line input, inline history cycling,
 -- and keybinding hints in the bottom-right border.
 
+local context_files = require("tau.context_files")
+
 local M = {}
 
 local _aug_id = 0
 
 --- @param history string[]  ordered newest-first
 --- @param on_choice fun(choice: string|nil)
---- @param opts? { context_key?: string }
+--- @param opts? { context_key?: string, current_file?: string }
 function M.open(history, on_choice, opts)
-  local context_key = opts and opts.context_key or "<leader>tc"
+  local context_key  = opts and opts.context_key or "<C-t>"
+  local current_file = opts and opts.current_file
   local closed = false
   local cycling = false
   local context_open = false
@@ -46,6 +49,96 @@ function M.open(history, on_choice, opts)
     style     = "minimal",
     noautocmd = true,
   })
+
+  -- "In Context" display window (appears below when files are selected)
+  local ctx_win = nil
+  local ctx_buf = nil
+
+  local function build_context_lines()
+    local files = context_files.get()
+    if #files == 0 then return nil end
+
+    local sep   = "  "
+    local sep_w = vim.fn.strdisplaywidth(sep)
+    local inner = width - 3  -- border left (1) + border right (1) + leading space prefix (1)
+    local lines = {}
+    local col = 0
+    local current = ""
+
+    for _, p in ipairs(files) do
+      local name = vim.fn.fnamemodify(p, ":t")
+      local nw = vim.fn.strdisplaywidth(name)
+      local prefix = col > 0 and sep or ""
+      local pw = (col > 0 and sep_w or 0) + nw
+
+      if col > 0 and col + pw > inner then
+        lines[#lines + 1] = " " .. current
+        current = name
+        col = nw
+      else
+        current = current .. prefix .. name
+        col = col + pw
+      end
+    end
+    if current ~= "" then
+      lines[#lines + 1] = " " .. current
+    end
+
+    return lines
+  end
+
+  local function refresh_ctx_win()
+    local lines = build_context_lines()
+
+    if not lines then
+      if ctx_win and vim.api.nvim_win_is_valid(ctx_win) then
+        vim.api.nvim_win_close(ctx_win, true)
+        ctx_win = nil
+        ctx_buf = nil
+      end
+      return
+    end
+
+    local ctx_height = #lines
+
+    if not ctx_win or not vim.api.nvim_win_is_valid(ctx_win) then
+      ctx_buf = vim.api.nvim_create_buf(false, true)
+      vim.bo[ctx_buf].bufhidden = "wipe"
+      vim.bo[ctx_buf].buftype = "nofile"
+      local ok, result = pcall(vim.api.nvim_open_win, ctx_buf, false, {
+        relative  = "editor",
+        row       = start_row + height + 2,
+        col       = start_col,
+        width     = width,
+        height    = ctx_height,
+        border    = "rounded",
+        title     = " In Context ",
+        title_pos = "left",
+        style     = "minimal",
+        noautocmd = true,
+      })
+      if not ok then
+        pcall(vim.api.nvim_buf_delete, ctx_buf, { force = true })
+        ctx_buf = nil
+        return
+      end
+      ctx_win = result
+    else
+      vim.api.nvim_win_set_config(ctx_win, {
+        relative = "editor",
+        row      = start_row + height + 2,
+        col      = start_col,
+        width    = width,
+        height   = ctx_height,
+      })
+    end
+
+    vim.bo[ctx_buf].modifiable = true
+    vim.api.nvim_buf_set_lines(ctx_buf, 0, -1, false, lines)
+    vim.bo[ctx_buf].modifiable = false
+  end
+
+  vim.schedule(refresh_ctx_win)
 
   -- History cycling state
   local hist_index  = 0
@@ -85,6 +178,11 @@ function M.open(history, on_choice, opts)
   local function close()
     if closed then return end
     closed = true
+    if ctx_win and vim.api.nvim_win_is_valid(ctx_win) then
+      vim.api.nvim_win_close(ctx_win, true)
+      ctx_win = nil
+      ctx_buf = nil
+    end
     vim.cmd("stopinsert")
     pcall(vim.api.nvim_del_augroup_by_name, aug_name)
     if vim.api.nvim_win_is_valid(win) then
@@ -119,13 +217,19 @@ function M.open(history, on_choice, opts)
   vim.keymap.set("n", "j",     hist_next, mo)
 
   local function open_context()
-    if vim.fn.exists(":TauContext") == 0 then
-      vim.api.nvim_echo({ { "tau: context management not yet implemented", "WarningMsg" } }, false, {})
-      return
-    end
+    if context_open then return end
     context_open = true
-    vim.cmd("TauContext")
-    context_open = false
+    require("tau.context_picker").open({
+      current_file = current_file,
+      on_close = function()
+        context_open = false
+        if not closed and vim.api.nvim_win_is_valid(win) then
+          vim.api.nvim_set_current_win(win)
+          vim.cmd("startinsert")
+          refresh_ctx_win()
+        end
+      end,
+    })
   end
   vim.keymap.set("i", context_key, open_context, mo)
   vim.keymap.set("n", context_key, open_context, mo)
@@ -159,7 +263,7 @@ function M.open(history, on_choice, opts)
       vim.schedule(function()
         if closed then return end
         local cur = vim.api.nvim_get_current_win()
-        if cur ~= win and not context_open then cancel() end
+        if cur ~= win and cur ~= ctx_win and not context_open then cancel() end
       end)
     end,
   })
