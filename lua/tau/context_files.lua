@@ -51,6 +51,23 @@ function M.contains(path)
   return _files[normalize(path)] ~= nil
 end
 
+--- Check if an already-normalized absolute path is in the context set.
+--- @param abs string  must be a normalized absolute path
+--- @return boolean
+function M.contains_abs(abs)
+  return _files[abs] ~= nil
+end
+
+--- Toggle an already-normalized absolute path in/out of the context set.
+--- @param abs string  must be a normalized absolute path
+function M.toggle_abs(abs)
+  if _files[abs] then
+    _files[abs] = nil
+  else
+    _files[abs] = true
+  end
+end
+
 --- Clear all context files.
 function M.clear()
   _files = {}

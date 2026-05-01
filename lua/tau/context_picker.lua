@@ -52,27 +52,11 @@ end
 local function format_line(abs_path, rel_path, current_file)
   if abs_path == current_file then
     return "  ◎ " .. rel_path
-  elseif context_files.contains(abs_path) then
+  elseif context_files.contains_abs(abs_path) then
     return "  ● " .. rel_path
   else
     return "    " .. rel_path
   end
-end
-
---- Build the footer with selected count (left) and hints (right), padded with ─.
---- @param width integer  inner window width
---- @param current_file string|nil  excluded from the selected count (always sent as --file)
---- @return string
-local function build_footer(width, current_file)
-  local count = 0
-  for _, p in ipairs(context_files.get()) do
-    if p ~= current_file then count = count + 1 end
-  end
-  local left = count > 0 and (" " .. count .. " selected ") or ""
-  local right = " <Space> toggle · <Esc> close "
-  local pad = width - vim.fn.strdisplaywidth(left) - vim.fn.strdisplaywidth(right)
-  if pad < 1 then pad = 1 end
-  return left .. string.rep("─", pad) .. right
 end
 
 --- Open the context file picker.
@@ -107,6 +91,23 @@ function M.open(opts)
   local start_row = math.floor((vim.o.lines - height - 2) / 2)
   local start_col = math.floor((vim.o.columns - width - 2) / 2)
 
+  -- Footer helpers (right side is constant; cache its display width)
+  local footer_right       = " <Space> toggle · <Esc> close "
+  local footer_right_width = vim.fn.strdisplaywidth(footer_right)
+
+  local function build_footer(count)
+    local left = count > 0 and (" " .. count .. " selected ") or ""
+    local pad = width - vim.fn.strdisplaywidth(left) - footer_right_width
+    if pad < 1 then pad = 1 end
+    return left .. string.rep("─", pad) .. footer_right
+  end
+
+  -- Track selected count locally to avoid context_files.get() on every toggle
+  local selected_count = 0
+  for _, p in ipairs(context_files.get()) do
+    if p ~= current_file then selected_count = selected_count + 1 end
+  end
+
   -- Buffer
   local buf = vim.api.nvim_create_buf(false, true)
   vim.bo[buf].bufhidden = "wipe"
@@ -122,7 +123,7 @@ function M.open(opts)
     border    = "rounded",
     title     = " Context Files ",
     title_pos = "left",
-    footer     = build_footer(width, current_file),
+    footer     = build_footer(selected_count),
     footer_pos = "left",
     style     = "minimal",
     noautocmd = true,
@@ -132,7 +133,7 @@ function M.open(opts)
 
   vim.cmd("stopinsert")
 
-  -- Render candidate lines
+  -- Full render used only on initial draw
   local function render()
     local lines = {}
     for _, c in ipairs(candidates) do
@@ -142,9 +143,8 @@ function M.open(opts)
     vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
     vim.bo[buf].modifiable = false
 
-    -- Update footer with current selected count
     if vim.api.nvim_win_is_valid(win) then
-      vim.api.nvim_win_set_config(win, { footer = build_footer(width, current_file), footer_pos = "left" })
+      vim.api.nvim_win_set_config(win, { footer = build_footer(selected_count), footer_pos = "left" })
     end
   end
 
@@ -170,17 +170,34 @@ function M.open(opts)
     local row = vim.api.nvim_win_get_cursor(win)[1]
     local c = candidates[row]
     if not c or c.abs == current_file then return end
-    context_files.toggle(c.abs)
-    render()
-    -- Restore cursor position
+
+    local was_selected = context_files.contains_abs(c.abs)
+    context_files.toggle_abs(c.abs)
+    selected_count = selected_count + (was_selected and -1 or 1)
+
+    -- Update only the toggled line
+    vim.bo[buf].modifiable = true
+    vim.api.nvim_buf_set_lines(buf, row - 1, row, false, { format_line(c.abs, c.rel, current_file) })
+    vim.bo[buf].modifiable = false
+
     if vim.api.nvim_win_is_valid(win) then
       vim.api.nvim_win_set_cursor(win, { row, 0 })
     end
+
+    -- Deferred so the line repaint is not blocked by the window re-layout
+    vim.schedule(function()
+      if vim.api.nvim_win_is_valid(win) then
+        vim.api.nvim_win_set_config(win, { footer = build_footer(selected_count), footer_pos = "left" })
+      end
+    end)
   end
 
   -- Keymaps
   local mo = { buffer = buf, noremap = true, silent = true }
-  vim.keymap.set("n", "<Space>", toggle, mo)
+  -- Space is commonly used as <Leader>; without nowait Neovim waits for
+  -- timeoutlen to see if a longer <Space> mapping follows before toggling.
+  local toggle_mo = { buffer = buf, noremap = true, silent = true, nowait = true }
+  vim.keymap.set("n", "<Space>", toggle, toggle_mo)
   vim.keymap.set("n", "<Esc>", close,  mo)
   vim.keymap.set("n", "q",     close,  mo)
 
