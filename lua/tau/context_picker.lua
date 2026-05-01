@@ -9,8 +9,8 @@ local _open = false
 
 vim.api.nvim_set_hl(0, "TauContextCursorLine", { link = "CursorLine" })
 
---- Collect candidate file paths (absolute), deduplicated and sorted.
---- @return string[]
+--- Collect candidate file paths, deduplicated and sorted.
+--- @return {abs: string, rel: string}[]
 local function get_candidates()
   local seen = {}
   local candidates = {}
@@ -23,39 +23,39 @@ local function get_candidates()
         local abs = vim.fn.fnamemodify(name, ":p")
         if not seen[abs] then
           seen[abs] = true
-          candidates[#candidates + 1] = abs
+          candidates[#candidates + 1] = { abs = abs, rel = vim.fn.fnamemodify(abs, ":~:.") }
         end
       end
     end
   end
 
   -- All files in the working directory
-  for _, rel in ipairs(vim.fn.glob("**/*", false, true)) do
-    if vim.fn.isdirectory(rel) == 0 then
-      local abs = vim.fn.fnamemodify(rel, ":p")
+  for _, rel_path in ipairs(vim.fn.glob("**/*", false, true)) do
+    if vim.fn.isdirectory(rel_path) == 0 then
+      local abs = vim.fn.fnamemodify(rel_path, ":p")
       if not seen[abs] then
         seen[abs] = true
-        candidates[#candidates + 1] = abs
+        candidates[#candidates + 1] = { abs = abs, rel = vim.fn.fnamemodify(abs, ":~:.") }
       end
     end
   end
 
-  table.sort(candidates)
+  table.sort(candidates, function(a, b) return a.abs < b.abs end)
   return candidates
 end
 
 --- Format a single candidate line for display.
 --- @param abs_path string
+--- @param rel_path string  pre-computed display path
 --- @param current_file string|nil  always-included locked file
 --- @return string
-local function format_line(abs_path, current_file)
-  local rel = vim.fn.fnamemodify(abs_path, ":~:.")
+local function format_line(abs_path, rel_path, current_file)
   if abs_path == current_file then
-    return "  ◎ " .. rel
+    return "  ◎ " .. rel_path
   elseif context_files.contains(abs_path) then
-    return "  ● " .. rel
+    return "  ● " .. rel_path
   else
-    return "    " .. rel
+    return "    " .. rel_path
   end
 end
 
@@ -88,6 +88,7 @@ function M.open(opts)
 
   local current_file = opts.current_file
 
+  -- rel paths are captured once at open; display labels become stale if cwd changes while picker is open
   local ok, candidates = pcall(get_candidates)
   if not ok or #candidates == 0 then
     _open = false
@@ -134,8 +135,8 @@ function M.open(opts)
   -- Render candidate lines
   local function render()
     local lines = {}
-    for _, abs in ipairs(candidates) do
-      lines[#lines + 1] = format_line(abs, current_file)
+    for _, c in ipairs(candidates) do
+      lines[#lines + 1] = format_line(c.abs, c.rel, current_file)
     end
     vim.bo[buf].modifiable = true
     vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
@@ -167,9 +168,9 @@ function M.open(opts)
   -- Toggle the file under cursor
   local function toggle()
     local row = vim.api.nvim_win_get_cursor(win)[1]
-    local abs = candidates[row]
-    if not abs or abs == current_file then return end
-    context_files.toggle(abs)
+    local c = candidates[row]
+    if not c or c.abs == current_file then return end
+    context_files.toggle(c.abs)
     render()
     -- Restore cursor position
     if vim.api.nvim_win_is_valid(win) then
