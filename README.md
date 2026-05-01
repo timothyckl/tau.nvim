@@ -4,7 +4,7 @@ A minimal Neovim plugin for applying LLM edits to a visual selection or range.
 
 Tau sends your instruction, selected code, nearby context, and optional context files to an OpenAI-compatible `/chat/completions` API, then streams the proposed edit back into Neovim for review.
 
-<img width="4116" height="2396" alt="image" src="https://github.com/user-attachments/assets/3c372aa4-aa95-4200-82e4-57ad9250368c" />
+<img width="4108" height="2392" alt="image" src="https://github.com/user-attachments/assets/83c013fc-b5d3-46bf-ad74-ea5b6f2f2632" />
 
 ## Install
 
