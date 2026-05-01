@@ -190,46 +190,6 @@ end
 --- @param start_line integer 1-indexed
 --- @param end_line integer 1-indexed
 --- @param instruction string
---- Detect the base indentation (leading whitespace of first non-empty selected line).
---- @param lines string[]
---- @return string
-local function base_indent(lines)
-  for _, line in ipairs(lines) do
-    local indent = line:match("^(%s+)")
-    if indent then return indent end
-  end
-  return ""
-end
-
---- Re-indent output lines to match the selection's base indentation.
---- Detects the output's own common indent, strips it, and prepends the target indent.
---- @param lines string[]
---- @param target string the indentation to apply
---- @return string[]
-local function reindent(lines, target)
-  -- Find the minimum indentation across non-empty output lines
-  local min_indent
-  for _, line in ipairs(lines) do
-    if line:match("%S") then
-      local indent = line:match("^(%s*)") or ""
-      if not min_indent or #indent < #min_indent then
-        min_indent = indent
-      end
-    end
-  end
-  min_indent = min_indent or ""
-
-  local result = {}
-  for _, line in ipairs(lines) do
-    if not line:match("%S") then
-      result[#result + 1] = ""
-    else
-      result[#result + 1] = target .. line:sub(#min_indent + 1)
-    end
-  end
-  return result
-end
-
 function M._execute(bufnr, start_line, end_line, instruction)
   if _job then
     vim.api.nvim_echo({ { "tau: request already in flight", "WarningMsg" } }, false, {})
@@ -237,7 +197,6 @@ function M._execute(bufnr, start_line, end_line, instruction)
   end
 
   local ctx = context.get(bufnr, start_line, end_line, config.context_lines)
-  local indent = base_indent(ctx.selection.lines)
 
   -- Place tracking extmarks to follow selection boundaries as user edits outside the region
   local mark_start = vim.api.nvim_buf_set_extmark(bufnr, NS_TRACK, start_line - 1, 0, {
@@ -303,7 +262,7 @@ function M._execute(bufnr, start_line, end_line, instruction)
         -- Remove only trailing whitespace, preserve leading indentation
         text = text:gsub("%s+$", "")
 
-        local new_lines = reindent(vim.split(text, "\n", { plain = true }), indent)
+        local new_lines = vim.split(text, "\n", { plain = true })
 
         local cur_start, cur_end = get_tracked_range(bufnr)
         local final_start = cur_start or start_line
