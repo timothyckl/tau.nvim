@@ -37,6 +37,14 @@ local function find_map(buf, lhs)
   return nil
 end
 
+local function assert_no_line_contains(lines, needle, message)
+  for _, line in ipairs(lines) do
+    if line:find(needle, 1, true) then
+      fail((message or "unexpected line") .. ": " .. line)
+    end
+  end
+end
+
 local start_dir = vim.loop.cwd()
 local temp_dir = vim.fn.tempname()
 vim.fn.mkdir(temp_dir, "p")
@@ -83,6 +91,30 @@ local ok, err = xpcall(function()
 
   assert_truthy(not context_files.contains_abs(current_file), "expected locked current file not to be toggled into context")
   assert_equal(vim.api.nvim_buf_get_lines(buf, 1, 2, false)[1], "  ◎ b.txt", "expected locked current-file row to remain unchanged")
+
+  local q_map = find_map(buf, "q")
+  assert_truthy(q_map, "expected buffer-local q mapping")
+  q_map.callback()
+
+  local git_dir = vim.fn.tempname()
+  vim.fn.mkdir(git_dir .. "/node_modules/pkg", "p")
+  vim.fn.writefile({ "node_modules/" }, git_dir .. "/.gitignore")
+  vim.fn.writefile({ "visible" }, git_dir .. "/visible.txt")
+  vim.fn.writefile({ "ignored" }, git_dir .. "/node_modules/pkg/index.js")
+
+  vim.cmd("cd " .. vim.fn.fnameescape(git_dir))
+  vim.fn.system({ "git", "init", "-q" })
+  assert_equal(vim.v.shell_error, 0, "expected git init to succeed")
+
+  require("tau.context_picker").open()
+  local git_buf = vim.api.nvim_get_current_buf()
+  local lines = vim.api.nvim_buf_get_lines(git_buf, 0, -1, false)
+
+  assert_truthy(vim.tbl_contains(lines, "    .gitignore"), "expected .gitignore to be listed")
+  assert_truthy(vim.tbl_contains(lines, "    visible.txt"), "expected visible untracked file to be listed")
+  assert_no_line_contains(lines, "node_modules", "expected .gitignore'd node_modules to be excluded")
+
+  vim.fn.delete(git_dir, "rf")
 end, debug.traceback)
 
 vim.cmd("cd " .. vim.fn.fnameescape(start_dir))

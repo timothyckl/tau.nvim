@@ -9,6 +9,30 @@ local _open = false
 
 vim.api.nvim_set_hl(0, "TauContextCursorLine", { link = "CursorLine" })
 
+local function add_candidate(candidates, seen, path)
+  local abs = vim.fn.fnamemodify(path, ":p")
+  if seen[abs] or vim.fn.isdirectory(abs) ~= 0 or vim.fn.filereadable(abs) == 0 then return end
+
+  seen[abs] = true
+  candidates[#candidates + 1] = { abs = abs, rel = vim.fn.fnamemodify(abs, ":~:.") }
+end
+
+--- List cwd files, respecting git ignore rules when cwd is inside a Git repo.
+--- @return string[]
+local function list_cwd_files()
+  local cwd = vim.loop.cwd() or vim.fn.getcwd()
+
+  if vim.fn.executable("git") == 1 then
+    local files = vim.fn.systemlist({ "git", "-C", cwd, "ls-files", "--cached", "--others", "--exclude-standard", "--", "." })
+    if vim.v.shell_error == 0 then
+      return files
+    end
+  end
+
+  -- Fallback for non-Git directories. This does not understand .gitignore.
+  return vim.fn.glob("**/*", false, true)
+end
+
 --- Collect candidate file paths, deduplicated and sorted.
 --- @return {abs: string, rel: string}[]
 local function get_candidates()
@@ -20,23 +44,16 @@ local function get_candidates()
     if vim.bo[buf].buflisted and vim.bo[buf].buftype == "" then
       local name = vim.api.nvim_buf_get_name(buf)
       if name ~= "" then
-        local abs = vim.fn.fnamemodify(name, ":p")
-        if not seen[abs] then
-          seen[abs] = true
-          candidates[#candidates + 1] = { abs = abs, rel = vim.fn.fnamemodify(abs, ":~:.") }
-        end
+        add_candidate(candidates, seen, name)
       end
     end
   end
 
-  -- All files in the working directory
-  for _, rel_path in ipairs(vim.fn.glob("**/*", false, true)) do
-    if vim.fn.isdirectory(rel_path) == 0 then
-      local abs = vim.fn.fnamemodify(rel_path, ":p")
-      if not seen[abs] then
-        seen[abs] = true
-        candidates[#candidates + 1] = { abs = abs, rel = vim.fn.fnamemodify(abs, ":~:.") }
-      end
+  -- Files in cwd. In Git repos this uses `git ls-files --exclude-standard`,
+  -- so .gitignore/.git/info/exclude/global excludes are honored.
+  for _, rel_path in ipairs(list_cwd_files()) do
+    if rel_path ~= "" then
+      add_candidate(candidates, seen, rel_path)
     end
   end
 
