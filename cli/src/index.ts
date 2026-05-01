@@ -115,6 +115,7 @@ async function main() {
   const userMessage = buildUserMessage({
     selection,
     instruction: opts.instruction,
+    filename: opts.filename,
     contextAbove: opts.contextAbove,
     contextBelow: opts.contextBelow,
     contextFiles: opts.contextFiles,

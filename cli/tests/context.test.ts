@@ -61,6 +61,48 @@ describe("buildUserMessage", () => {
     expect(belowIdx).toBeLessThan(instIdx)
   })
 
+  test("sections separated by blank lines", () => {
+    const result = buildUserMessage({
+      selection: "SEL",
+      instruction: "INST",
+      contextAbove: "ABOVE",
+      contextBelow: "BELOW",
+    })
+    expect(result).toContain("ABOVE\n\n[Selected code]")
+    expect(result).toContain("SEL\n\n[Context below]")
+    expect(result).toContain("BELOW\n\n[Instruction]")
+  })
+
+  describe("active file label", () => {
+    test("label appears directly above [Context above] when filename provided", () => {
+      const result = buildUserMessage({
+        selection: "SEL",
+        instruction: "INST",
+        filename: "/path/to/active.lua",
+        contextAbove: "ABOVE",
+      })
+      expect(result).toContain("--- /path/to/active.lua ---\n[Context above]")
+    })
+
+    test("label appears directly above [Selected code] when filename provided but no contextAbove", () => {
+      const result = buildUserMessage({
+        selection: "SEL",
+        instruction: "INST",
+        filename: "/path/to/active.lua",
+      })
+      expect(result).toContain("--- /path/to/active.lua ---\n\n[Selected code]")
+    })
+
+    test("no label when filename omitted", () => {
+      const result = buildUserMessage({
+        selection: "SEL",
+        instruction: "INST",
+        contextAbove: "ABOVE",
+      })
+      expect(result).not.toMatch(/^--- .* ---$/m)
+    })
+  })
+
   describe("context files", () => {
     let tmpDir: string
     let tmpFile: string
@@ -84,6 +126,15 @@ describe("buildUserMessage", () => {
       expect(result).toContain("[Context files]")
       expect(result).toContain(`--- ${tmpFile} ---`)
       expect(result).toContain("export function helper() { return 42 }")
+    })
+
+    test("file header and content not separated by blank line", () => {
+      const result = buildUserMessage({
+        selection: "SEL",
+        instruction: "INST",
+        contextFiles: [tmpFile],
+      })
+      expect(result).toContain(`--- ${tmpFile} ---\nexport function helper()`)
     })
 
     test("omits context files section when empty", () => {
