@@ -37,7 +37,7 @@ export function buildSystemPrompt(opts: PromptOpts): string {
     contextFilesRule,
     "- No markdown fences (no ```)",
     "- No explanation or commentary",
-    "- Preserve indentation and style",
+    "- Match the exact indentation of the selected code — use the same leading whitespace on every line",
     fileLine,
   ]
     .filter(Boolean)
