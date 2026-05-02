@@ -31,6 +31,82 @@ Using [lazy.nvim](https://github.com/folke/lazy.nvim):
 }
 ```
 
+Using `vim.pack`:
+
+`tau.nvim` requires [Bun](https://bun.sh) to build the CLI binary at `cli/tau`.
+The plugin is not usable until that build has completed, because `:Tau`,
+`:TauContext`, and `:TauCancel` all rely on the compiled CLI being present.
+
+Minimal install:
+
+```lua
+vim.pack.add({
+  {
+    src = "https://github.com/timothyckl/tau.nvim"
+  },
+})
+```
+
+Complete example with automatic rebuilds on install and update:
+
+```lua
+-- Define this before vim.pack.add() so fresh installs also build cli/tau.
+vim.api.nvim_create_autocmd("PackChanged", {
+  callback = function(ev)
+    local data = ev.data
+    if data.spec.name ~= "tau.nvim" then
+      return
+    end
+    if data.kind ~= "install" and data.kind ~= "update" then
+      return
+    end
+
+    local result = vim.system({ "bun", "run", "build" }, {
+      cwd = data.path .. "/cli",
+      text = true,
+    }):wait()
+
+    if result.code ~= 0 then
+      local output = vim.trim(
+        (result.stderr and result.stderr ~= "") and result.stderr or (result.stdout or "")
+      )
+      if output == "" then
+        output = ("bun run build exited with code %d"):format(result.code)
+      end
+      vim.notify(
+        ("tau.nvim: failed to build cli/tau\n%s"):format(output),
+        vim.log.levels.ERROR
+      )
+    end
+  end,
+})
+
+vim.pack.add({
+  { src = "https://github.com/timothyckl/tau.nvim" },
+})
+
+require("tau").setup({
+  api_url = "https://api.openai.com/v1", -- Tau appends /chat/completions
+  api_key = vim.env.OPENAI_API_KEY,
+  model = "gpt-4o",
+})
+
+vim.keymap.set("v", "<leader>t", ":Tau<CR>", { desc = "Tau: edit selection" })
+vim.keymap.set("n", "<C-t>", ":TauContext<CR>", { desc = "Tau: context files" })
+vim.keymap.set("n", "<leader>T", ":TauCancel<CR>", { desc = "Tau: cancel request" })
+```
+
+The `PackChanged` hook rebuilds `cli/tau` after every install and update, and
+`vim.system(...):wait()` keeps the build synchronous so the CLI is present
+before first use.
+
+If you hit `ENOENT: no such file or directory ... /cli/tau`, the CLI was not
+built yet. Rebuild it manually with:
+
+```sh
+cd <plugin>/cli && bun run build
+```
+
 For Ollama-compatible local servers:
 
 ```lua
